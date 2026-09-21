@@ -1,10 +1,134 @@
 <!DOCTYPE html>
-<html>
-<head><meta charset="utf-8"><title>FinTech 535 Semester Project</title></head>
-<body style="background:#0d1117;color:#e6edf3;font-family:monospace;padding:40px;">
-<h1>FinTech 535 — Semester Project</h1>
-<ul>
-<li><a href="hw1/index.html" style="color:#00ffcc;">HW1: UUUU Expired Options Sparsity Dashboard</a></li>
-</ul>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FINTECH 535 - Semester Project</title>
+<style>
+  :root {
+    color-scheme: light;
+    --bg: #f3ecdf; --surface: #fbf7ee; --surface-2: #ede4d3;
+    --ink: #2b2620; --ink-2: #5a5144; --ink-3: #75695a;
+    --hair: #dfd4bf; --accent: #1d6f6a; --accent-2: #b85a33;
+    --shadow: 0 1px 2px rgba(80, 60, 20, 0.07), 0 10px 24px -14px rgba(80, 60, 20, 0.28);
+    --shadow-up: 0 2px 4px rgba(80, 60, 20, 0.08), 0 18px 36px -16px rgba(80, 60, 20, 0.38);
+    --fade: 251, 247, 238;   /* surface as r, g, b for the gradient over each preview */
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      color-scheme: dark;
+      --bg: #1f1b16; --surface: #29241d; --surface-2: #332d24;
+      --ink: #f2eadb; --ink-2: #cdc3af; --ink-3: #a29883;
+      --hair: #40382c; --accent: #4fb0a8; --accent-2: #e58a5e;
+      --shadow: none; --shadow-up: 0 18px 36px -16px rgba(0, 0, 0, 0.6);
+      --fade: 41, 36, 29;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 15px/1.6 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1040px; margin: 0 auto; padding: 0 20px; }
+  header.wrap { padding-top: 56px; padding-bottom: 28px; }
+  .eyebrow { margin: 0 0 8px; color: var(--ink-3); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; }
+  h1 { margin: 0 0 10px; font: 600 clamp(30px, 5.5vw, 46px)/1.1 ui-serif, Georgia, "Iowan Old Style", "Times New Roman", serif; letter-spacing: -0.01em; }
+  header p.sub { margin: 0; color: var(--ink-2); max-width: 56ch; }
+
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: 24px; padding-bottom: 72px; }
+
+  .proj {
+    display: flex; flex-direction: column; text-decoration: none; color: inherit;
+    background: var(--surface); border: 1px solid var(--hair); border-radius: 20px; overflow: hidden;
+    box-shadow: var(--shadow); transition: transform .22s ease, box-shadow .22s ease, border-color .22s ease;
+  }
+  .proj:hover, .proj:focus-visible { transform: translateY(-4px); box-shadow: var(--shadow-up); border-color: var(--accent); outline: none; }
+  .proj:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+
+  /* the preview: the real site, scaled down and not clickable, fading into the card below it */
+  .peek { position: relative; aspect-ratio: 16 / 10; overflow: hidden; background: var(--surface-2); }
+  .peek iframe {
+    position: absolute; top: 0; left: 0; width: 1280px; height: 800px; border: 0;
+    transform-origin: 0 0; pointer-events: none; background: transparent;
+    transition: filter .22s ease;
+  }
+  .peek::after {
+    content: ""; position: absolute; inset: 0; pointer-events: none;
+    background: linear-gradient(to bottom, rgba(var(--fade), 0) 55%, rgba(var(--fade), 0.92) 100%);
+  }
+  .proj:hover .peek iframe { filter: saturate(1.08); }
+
+  .body { padding: 6px 22px 22px; }
+  .tag { display: inline-block; margin: 0 0 6px; padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 650; letter-spacing: .04em;
+    color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
+  .proj h2 { margin: 0 0 6px; font: 600 24px/1.2 ui-serif, Georgia, "Iowan Old Style", "Times New Roman", serif; }
+  .proj p { margin: 0 0 14px; color: var(--ink-2); }
+  .go { display: inline-flex; align-items: center; gap: 6px; color: var(--accent); font-weight: 650; font-size: 14px; }
+  .go span { display: inline-block; transition: transform .2s ease; }
+  .proj:hover .go span { transform: translateX(4px); }
+
+  @media (prefers-reduced-motion: reduce) {
+    .proj, .go span, .peek iframe { transition: none; }
+    .proj:hover, .proj:focus-visible { transform: none; }
+  }
+  footer { padding: 0 0 48px; color: var(--ink-3); font-size: 13px; }
+</style>
+</head>
+<body>
+
+<header class="wrap">
+  <p class="eyebrow">FINTECH 535</p>
+  <h1>Semester Project</h1>
+  <p class="sub">Advanced Design &amp; Algorithmic Trading Systems. One card per homework; each preview is the live page.</p>
+</header>
+
+<main class="wrap">
+  <div class="grid">
+
+    <a class="proj" href="hw1/index.html" aria-label="Open HW1: UUUU expired options sparsity dashboard">
+      <div class="peek">
+        <iframe src="hw1/index.html" title="" tabindex="-1" aria-hidden="true" loading="lazy" sandbox="allow-scripts allow-same-origin"></iframe>
+      </div>
+      <div class="body">
+        <span class="tag">HW1</span>
+        <h2>UUUU Options Sparsity</h2>
+        <p>An interactive chart of UUUU expired call mid prices by strike and days to expiry, showing how thin the data is.</p>
+        <span class="go">Open the dashboard <span aria-hidden="true">&rarr;</span></span>
+      </div>
+    </a>
+
+    <a class="proj" href="hw1_2/index.html" aria-label="Open HW1.2: Cover Calls">
+      <div class="peek">
+        <iframe src="hw1_2/index.html" title="" tabindex="-1" aria-hidden="true" loading="lazy" sandbox="allow-scripts allow-same-origin"></iframe>
+      </div>
+      <div class="body">
+        <span class="tag">HW1.2</span>
+        <h2>Cover Calls</h2>
+        <p>A weekly AAPL covered call backtest with the blotter, ledger, Reg T margin, NAV path, and my more aggressive version next to the basic one.</p>
+        <span class="go">Open the backtest <span aria-hidden="true">&rarr;</span></span>
+      </div>
+    </a>
+
+  </div>
+</main>
+
+<script>
+  // Scale each 1280 x 800 preview to the width of its card.
+  (function () {
+    var boxes = document.querySelectorAll(".peek");
+    function fit(box) {
+      var f = box.querySelector("iframe");
+      f.style.transform = "scale(" + (box.clientWidth / 1280) + ")";
+    }
+    boxes.forEach(fit);
+    if (window.ResizeObserver) {
+      var ro = new ResizeObserver(function (es) { es.forEach(function (e) { fit(e.target); }); });
+      boxes.forEach(function (b) { ro.observe(b); });
+    } else {
+      window.addEventListener("resize", function () { boxes.forEach(fit); });
+    }
+  })();
+</script>
 </body>
 </html>

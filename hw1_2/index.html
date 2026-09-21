@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HW1.2 - Cover Calls</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div id="demo-banner" class="demo" hidden>DEMO DATA: synthetic prices from demo_data.py, not LSEG. Do not turn this in.</div>
+
+<header class="wrap hero">
+  <p class="eyebrow">FINTECH 535 &middot; Covered call backtest</p>
+  <h1 id="title">HW1.2 - Cover Calls</h1>
+  <p class="sub" id="subtitle"></p>
+</header>
+
+<nav class="bar" aria-label="Sections">
+  <div class="wrap">
+    <a class="home" href="../index.html">&larr; All projects</a>
+    <a href="#summary">Summary</a>
+    <a href="#writeup">Write-up</a>
+    <a href="#blotter">Blotter</a>
+    <a href="#weeks">Weeks</a>
+    <a href="#ledger">Ledger</a>
+    <a href="#regt">Reg T</a>
+    <a href="#nav">NAV &amp; margin</a>
+    <a href="#mine">My version</a>
+    <a href="#fills">Mid vs trade</a>
+    <a href="#checks">Checks</a>
+    <a href="data.html">Data</a>
+    <span class="sp"></span>
+    <button class="ghost" id="theme" type="button" aria-label="Change color theme">Theme: auto</button>
+  </div>
+</nav>
+
+<main class="wrap">
+
+  <section id="summary">
+    <h2>Summary</h2>
+    <p class="lede" id="summary-lede"></p>
+    <div class="tiles" id="tiles"></div>
+  </section>
+
+  <section id="writeup">
+    <h2>Write-up</h2>
+    <div class="card prose" id="writeup-body"></div>
+  </section>
+
+  <section id="blotter">
+    <h2>Blotter</h2>
+    <p class="lede">Only trades that actually happened: every entry and exit, in order. No working orders, no signals. Cash delta is 100 &times; price for options and stock, and only these rows move cash.</p>
+    <div class="tbl" id="blotter-tbl"></div>
+  </section>
+
+  <section id="weeks">
+    <h2>Week by week</h2>
+    <p class="lede">One row per expiry Friday: what strike the rule picked, what the market looked like when I wrote it, and how the week ended. Skipped weeks say why.</p>
+    <div class="tbl short" id="weeks-tbl"></div>
+    <ul class="skiplist" id="skips"></ul>
+  </section>
+
+  <section id="ledger">
+    <h2>Ledger</h2>
+    <p class="lede">The book at each timestamp: shares, the short call (strike and expiry), cash, and marks. Stock is marked at the bar's stock print, the call at its mid (last mid if a bar has no quote, flagged stale). The short call counts as negative.</p>
+    <div class="controls">
+      <span>Rows</span>
+      <span class="seg" role="group" aria-label="Ledger rows">
+        <button type="button" data-rows="daily" aria-pressed="true">Daily close + trades</button>
+        <button type="button" data-rows="all" aria-pressed="false">Every hourly bar</button>
+      </span>
+    </div>
+    <div class="tbl" id="ledger-tbl"></div>
+  </section>
+
+  <section id="regt">
+    <h2>Reg T account</h2>
+    <p class="lede">Reg T, not portfolio margin. I can work every number out from the ledger without a broker's risk engine.</p>
+    <div class="two">
+      <div class="card">
+        <dl class="formula">
+          <dt>NAV</dt><dd>cash + stock MV + option MV (short call is negative)</dd>
+          <dt>LMV</dt><dd>shares &times; stock mark</dd>
+          <dt>Initial</dt><dd>50% of stock LMV (a covered short call adds $0)</dd>
+          <dt>Maintenance</dt><dd>25% of stock LMV (FINRA)</dd>
+          <dt>Available funds</dt><dd>NAV &minus; Initial</dd>
+          <dt>Excess</dt><dd>NAV &minus; Maintenance</dd>
+        </dl>
+      </div>
+      <div class="card" id="regt-note"></div>
+    </div>
+    <h3>Reg T at each timestamp</h3>
+    <div class="tbl" id="regt-tbl"></div>
+  </section>
+
+  <section id="nav">
+    <h2>NAV and margin</h2>
+    <p class="lede">Hover (or use the arrow keys after tabbing into a chart) to read the whole account at any hour. Shaded bands alternate by week; ticks mark each entry day.</p>
+    <div class="card">
+      <h3 style="margin-top:0">NAV path</h3>
+      <div class="legend" id="lg-nav"></div>
+      <div class="chart" id="ch-nav"></div>
+    </div>
+    <div class="card" style="margin-top:12px">
+      <h3 style="margin-top:0">NAV against Reg T requirements</h3>
+      <div class="legend" id="lg-margin"></div>
+      <div class="chart" id="ch-margin"></div>
+    </div>
+  </section>
+
+  <section id="mine">
+    <h2>My version: <span id="mine-name"></span></h2>
+    <p class="lede" id="mine-lede"></p>
+    <div class="tbl short" id="cmp-tbl"></div>
+    <div class="card" style="margin-top:12px">
+      <h3 style="margin-top:0">NAV: my version vs the basic version</h3>
+      <div class="legend" id="lg-mine"></div>
+      <div class="chart" id="ch-mine"></div>
+    </div>
+    <h3>Week by week, side by side</h3>
+    <div class="tbl short" id="cmp-weeks"></div>
+    <ul class="skiplist" id="mine-skips"></ul>
+    <h3>Blotter (my version)</h3>
+    <div class="tbl" id="mine-blotter"></div>
+    <h3>Ledger and Reg T (my version)</h3>
+    <div class="tbl" id="mine-ledger"></div>
+  </section>
+
+  <section id="fills">
+    <h2>Mid vs trade</h2>
+    <p class="lede">Every bar where a call both had a real bid/ask and a trade printed. If trades sit on the line, mid is a fair price to assume for my fills. Y is TRDPRC_1, X is (BID+ASK)/2, same bar.</p>
+    <div class="controls">
+      <label>Strikes <select id="f-money">
+        <option value="99">All fetched</option>
+        <option value="0.03">Within 3% of spot</option>
+        <option value="0.015">Within 1.5% of spot</option>
+      </select></label>
+      <label>Mid at least <select id="f-mid">
+        <option value="0">$0.00</option>
+        <option value="0.10">$0.10</option>
+        <option value="0.50">$0.50</option>
+        <option value="1">$1.00</option>
+      </select></label>
+      <a href="#" id="dl-csv">Download these points (CSV)</a>
+    </div>
+    <div class="card">
+      <div class="legend" id="lg-sc"></div>
+      <div class="chart" id="ch-sc"></div>
+      <div class="stat" id="sc-stat"></div>
+    </div>
+  </section>
+
+  <section id="checks">
+    <h2>Checks</h2>
+    <p class="lede">The build script re-derives these from the raw bars instead of trusting its own bookkeeping. If one fails it shows here.</p>
+    <div class="card"><ul class="checks" id="checks-list"></ul></div>
+    <h3>Data coverage</h3>
+    <p class="lede" style="margin-bottom:8px">What came back from the pull for each expiry. "Quoted" means bars with a real bid and ask; "traded" means bars with a TRDPRC_1.</p>
+    <div class="tbl short" id="cov-tbl"></div>
+  </section>
+
+</main>
+
+<footer class="wrap" id="foot"></footer>
+
+<script src="book.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

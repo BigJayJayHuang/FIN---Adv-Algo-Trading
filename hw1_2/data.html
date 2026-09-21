@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Data - HW1.2 - Cover Calls</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="wrap hero">
+  <p class="eyebrow">HW1.2 - Cover Calls &middot; Local data tool</p>
+  <h1>Data</h1>
+  <p class="sub"><a href="index.html">&larr; Back to the backtest</a></p>
+</header>
+<main class="wrap">
+  <section>
+    <div class="card" id="gate"><p class="lede" style="margin:0">Checking connection&hellip;</p></div>
+    <div id="local" hidden>
+      <div class="card" id="meta" style="margin-bottom:12px"></div>
+      <div class="tbl" id="rics"></div>
+    </div>
+  </section>
+</main>
+<script>
+(function () {
+  var gate = document.getElementById("gate");
+  var h = location.hostname;
+  var local = (h === "localhost" || h === "127.0.0.1" || h === "[::1]") && location.protocol !== "file:";
+  function say(title, body) {
+    gate.textContent = "";
+    var t = document.createElement("h2"); t.textContent = title; t.style.margin = "0 0 6px";
+    var p = document.createElement("p"); p.className = "lede"; p.style.margin = "0"; p.textContent = body;
+    gate.append(t, p);
+  }
+  if (!local) {
+    say("Data connection required",
+        "This page reads the raw LSEG pull through a small server that only runs on the author's machine (python3 local_server.py, then open http://127.0.0.1:8765/data.html). " +
+        "The published site does not need it: everything on the main page is baked into book.js.");
+    return;
+  }
+  fetch("/api/status").then(function (r) { return r.json(); }).then(function (j) {
+    if (!j.ok) { say("Data connection required", j.error || "raw_data.pkl not found. Run fetch_data.py first."); return; }
+    gate.hidden = true;
+    document.getElementById("local").hidden = false;
+    var m = document.getElementById("meta");
+    var lines = [["Source", j.meta.source], ["Pulled", j.meta.fetched_at], ["Interval", j.meta.interval],
+                 ["Stock", j.meta.stock_ric + " - " + j.stock_bars + " bars, " + j.stock_first + " to " + j.stock_last],
+                 ["Option RICs with data", j.rics.length + " of " + j.tried + " looked up"]];
+    lines.forEach(function (l) { var p = document.createElement("p"); p.style.margin = "0 0 4px";
+      var b = document.createElement("b"); b.textContent = l[0] + ": "; p.append(b, document.createTextNode(String(l[1]))); m.append(p); });
+    var t = document.createElement("table"), th = document.createElement("thead"), tr = document.createElement("tr");
+    ["RIC", "Expiry", "Strike", "Bars", "Quoted", "Traded", "First bar", "Last bar"].forEach(function (c) { var x = document.createElement("th"); x.textContent = c; tr.append(x); });
+    th.append(tr); t.append(th);
+    var tb = document.createElement("tbody");
+    j.rics.forEach(function (r) { var row = document.createElement("tr");
+      [r.ric, r.expiry, r.strike, r.bars, r.quoted, r.traded, r.first, r.last].forEach(function (v) { var td = document.createElement("td"); td.textContent = v; row.append(td); });
+      tb.append(row); });
+    t.append(tb); document.getElementById("rics").append(t);
+  }).catch(function () { say("Data connection required", "The local server is not answering. Start it with: python3 local_server.py"); });
+})();
+</script>
+</body>
+</html>
