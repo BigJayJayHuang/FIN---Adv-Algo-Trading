@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HW2 - Poor Man's Covered Call</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div id="demo-banner" class="demo" hidden>DEMO DATA: synthetic prices from demo_data2.py, not LSEG. Do not turn this in.</div>
+
+<header class="wrap hero">
+  <p class="eyebrow">FINTECH 535 &middot; Poor man's covered call</p>
+  <h1 id="title">HW2 - Poor Man's Covered Call</h1>
+  <p class="sub" id="subtitle"></p>
+</header>
+
+<nav class="bar" aria-label="Sections">
+  <div class="wrap">
+    <a class="home" href="../index.html">&larr; All projects</a>
+    <a href="#summary">Summary</a>
+    <a href="#writeup">Write-up</a>
+    <a href="#pmcc-blotter">PMCC blotter</a>
+    <a href="#pmcc-weeks">PMCC weeks</a>
+    <a href="#pmcc-ledger">PMCC account</a>
+    <a href="#compare">Comparison</a>
+    <a href="#cc">Covered call</a>
+    <a href="#fills">Mid vs trade</a>
+    <a href="#checks">Checks</a>
+    <a href="data.html">Data</a>
+    <span class="sp"></span>
+    <button class="ghost" id="theme" type="button" aria-label="Change color theme">Theme: auto</button>
+  </div>
+</nav>
+
+<main class="wrap">
+
+  <section id="summary">
+    <h2>Summary</h2>
+    <p class="lede" id="summary-lede"></p>
+    <div class="tiles" id="tiles"></div>
+  </section>
+
+  <section id="writeup">
+    <h2>Write-up</h2>
+    <div class="card prose" id="writeup-body"></div>
+  </section>
+
+  <section id="pmcc-blotter">
+    <h2>PMCC blotter</h2>
+    <p class="lede">Every trade that actually happened on the diagonal: the one long call purchase, and each week's short call sold, expired, or bought back. No working orders, no signals.</p>
+    <div class="tbl" id="pmcc-blotter-tbl"></div>
+  </section>
+
+  <section id="pmcc-weeks">
+    <h2>PMCC week by week</h2>
+    <p class="lede">One row per expiry Friday: the short strike the rule picked, the premium, and how the week ended. "Closed" means I bought the short call back at its own mark rather than let it run into an assignment I can't cover.</p>
+    <div class="tbl short" id="pmcc-weeks-tbl"></div>
+    <ul class="skiplist" id="pmcc-skips"></ul>
+  </section>
+
+  <section id="pmcc-ledger">
+    <h2>PMCC account</h2>
+    <p class="lede">Cash, the long call's mark, the short call's mark (if one is open), and NAV at each timestamp. The "capital required" line is explained in the write-up.</p>
+    <div class="controls">
+      <span>Rows</span>
+      <span class="seg" role="group" aria-label="Ledger rows">
+        <button type="button" data-rows="daily" aria-pressed="true">Daily close + trades</button>
+        <button type="button" data-rows="all" aria-pressed="false">Every hourly bar</button>
+      </span>
+    </div>
+    <div class="tbl" id="pmcc-ledger-tbl"></div>
+  </section>
+
+  <section id="compare">
+    <h2>PMCC vs covered call vs buy &amp; hold</h2>
+    <p class="lede">Same stock, same weekly short-call rule (3% OTM, filled at mid). The only thing that changes is what collateralizes the short call: 100 shares (covered call), one deep-in-the-money call (PMCC), or nothing - just holding the stock.</p>
+    <div class="tbl short" id="cmp-tbl"></div>
+    <div class="card" style="margin-top:12px">
+      <h3 style="margin-top:0">NAV, each on its own capital</h3>
+      <p class="lede" style="margin-bottom:8px">Every series starts at 100% of its own starting cash, so this reads as return on capital deployed, not dollars - PMCC is scaled up far more by the same dollar move in DAL.</p>
+      <div class="legend" id="lg-cmp"></div>
+      <div class="chart" id="ch-cmp"></div>
+    </div>
+  </section>
+
+  <section id="cc">
+    <h2>Covered call (comparison baseline)</h2>
+    <p class="lede">Same engine as HW1.2: buy 100 shares, sell a weekly call at 3% OTM, wait through expiry, Reg T margin. Shown here only as the capital-heavy baseline PMCC is compared against.</p>
+    <div class="tbl short" id="cc-weeks-tbl"></div>
+    <ul class="skiplist" id="cc-skips"></ul>
+    <h3>Blotter</h3>
+    <div class="tbl" id="cc-blotter-tbl"></div>
+  </section>
+
+  <section id="fills">
+    <h2>Mid vs trade</h2>
+    <p class="lede">Every bar where a short call both had a real bid/ask and a trade printed (the same weekly chain backs both strategies' short leg). If trades sit on the line, mid is a fair price to assume for my fills. Y is TRDPRC_1, X is (BID+ASK)/2, same bar.</p>
+    <div class="card">
+      <div class="legend" id="lg-sc"></div>
+      <div class="chart" id="ch-sc"></div>
+      <div class="stat" id="sc-stat"></div>
+    </div>
+  </section>
+
+  <section id="checks">
+    <h2>Checks</h2>
+    <p class="lede">Re-derived independently from the raw bars, not from the engine's own bookkeeping. If one fails it shows here.</p>
+    <div class="card"><ul class="checks" id="checks-list"></ul></div>
+  </section>
+
+</main>
+
+<footer class="wrap" id="foot"></footer>
+
+<script src="book2.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
