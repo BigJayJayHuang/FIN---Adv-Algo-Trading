@@ -2,3 +2,10 @@ raw_data3.pkl
 __pycache__/
 raw_wide3.pkl
 raw_wide3_fake.pkl
+
+# throwaway debugging / exploration scripts, not part of the deliverable
+diag_*.py
+
+# abandoned parameter-sweep experiment, not used in final results
+fetch_wide3.py
+sweep3.py
