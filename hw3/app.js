@@ -143,7 +143,7 @@
   })();
 
   (function writeBlackout() {
-    const blackoutWeeks = (data.weeks || []).filter(w => w.skip && w.skip.toLowerCase().includes("earnings blackout"));
+    const blackoutWeeks = (B.weeks || []).filter(w => w.skip && w.skip.toLowerCase().includes("earnings blackout"));
     const el2 = $("#blackout-text");
     if (!blackoutWeeks.length) {
       el2.textContent = "No earnings fell inside this run's window, so the blackout rule never actually fired here - included anyway as the engine's standing risk rule.";
