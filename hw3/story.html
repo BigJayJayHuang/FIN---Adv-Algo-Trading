@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Wheel — the story</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="wrap hero">
+  <p class="eyebrow">FINTECH 535 &middot; The wheel</p>
+  <h1>The story behind the numbers</h1>
+  <p class="sub">Why INTC, what the strategy actually bets on, and how the backtest fought back before it worked.</p>
+</header>
+
+<nav class="bar" aria-label="Sections">
+  <div class="wrap">
+    <a class="home" href="index.html">&larr; Back to the backtest</a>
+    <span class="sp"></span>
+  </div>
+</nav>
+
+<main class="wrap">
+<div class="card prose" style="margin-top:24px">
+
+<h2 style="margin-top:0">Why INTC</h2>
+<p>The wheel needs a single, liquid, optionable name to run a cash-secured-put / covered-call cycle on for a few months straight, and it benefits from <i>not</i> being quiet the whole time — a stock that only ever grinds sideways never tests whether the strategy's regime-aware strike sizing (far OTM puts when vol is calm, tight ones when vol is elevated) is actually doing anything. INTC fit: a well-covered, standard-listed name with weekly and monthly options, and - as this backtest's own window shows - plenty of real volatility to react to, not a hypothetical. It's also the same root used in earlier assignments this semester, so the fetch/RIC-parsing groundwork already existed to build on rather than start from zero.</p>
+
+<h2>The thesis, briefly</h2>
+<p>Selling premium every week, on whichever side of the stock the position currently sits, should smooth the ride relative to just holding the stock outright — it caps some upside but pads the down weeks — <i>if</i> the strikes are sized off something real (measured realized vol for puts, cost basis for calls) rather than a single flat percentage regardless of conditions. The bet is specifically about risk-adjusted performance, not raw return: a stock that falls 40% in five months is not a bet the wheel was ever going to out-earn dollar for dollar, only cushion.</p>
+
+<h2>What actually happened building it</h2>
+<p>The backtest engine itself came together quickly - the decision rules, the ledger, the checks. The real fight was getting real option data out of LSEG at all for the put side. Calls resolved fine from day one. Puts came back almost completely empty: 21 of 22 weeks found zero resolvable put contracts, and the one week that did resolve lost 96% of its starting capital - clearly not real.</p>
+<p>The instinct was to work around it (synthesize puts from put-call parity, shrink the search window, blame the ticker). None of those were right, and the actual cause turned out to be a narrow, specific symbol-format bug in how an expired option's RIC is built - not worth re-deriving step by step here, but the short version is that one part of the symbol was being built the same way for puts as for calls, when it should not have been. A classmate's independently-built project on a different ticker, and the course's own symbology reference, is what finally pinned it down. Fixing that one function made every real put in the dataset resolve.</p>
+<p>That fix didn't end it, though - it just moved the problem. With real data flowing, the backtest's own internal consistency check (build_book3.py independently re-derives every decision from the raw bars, rather than trusting the fetch script's own bookkeeping) kept failing: strikes that were valid against the fetch-time target weren't valid against the build-time recompute. Three more real, separate bugs turned up this way, each found by literally comparing the two scripts' intermediate numbers side by side until they diverged: the fetch script was taking a stock bar outside regular trading hours as "the day's close" in one case; it was never converting option quote timestamps from UTC to the exchange's local time at all, silently picking the wrong hour's price as the week's entry fill; and it was computing a volatility reading for a week that had no real Monday price at all, quietly polluting the trailing window used for every week after it. Each one only showed up because the two independent code paths were forced to agree before the result was trusted - which is the actual point of building it that way.</p>
+<p>None of this was wasted motion: a backtest whose fetch and build logic silently disagree isn't wrong in some abstract, forgivable way - it's reporting a number that never happened. The checks section on the main page exists because of this, not as a formality.</p>
+
+<h2>The enhancement: an earnings blackout</h2>
+<p>Once the engine was trustworthy, the obvious next question was risk, not return: this strategy sells one week of option premium at a time, and that premium is priced for an ordinary week - it is not compensated for the kind of overnight gap a quarterly earnings print can cause, where the stock opens far past any strike the model would have picked. A put sold into an elevated-vol week already expects some chop; it does not expect the stock to gap 15% before the position can react.</p>
+<p>So the enhancement is a simple standing rule, not a prediction: don't open a new put or call the week of earnings, or the week immediately before it. INTC's own confirmed Q2 and Q3 2026 results dates (both after-market) fall inside this backtest's window, so the rule actually fires here, not just in theory - the main page's write-up section states exactly which weeks it held the position back on and what that cost in foregone premium. It's a deliberate trade: give up a little income in exchange for not pricing a position into an event the strategy has no edge forecasting.</p>
+
+</div>
+</main>
+
+<footer class="wrap"><p><a href="index.html">&larr; Back to the backtest</a></p></footer>
+
+</body>
+</html>
