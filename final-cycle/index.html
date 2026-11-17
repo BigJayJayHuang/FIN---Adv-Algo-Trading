@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Sleeper / Striker - Final Project</title>
+<title>Sleeper / Striker - Final Cycle</title>
 <meta name="description" content="A nightly options algorithm that sells theta when the tape is quiet and follows irregular options flow when it isn't. Writes open_orders.json for Sanji.">
 <style>
   :root {
@@ -91,7 +91,7 @@
 
 <header class="wrap">
   <p class="crumb"><a href="../index.html">&larr; FINTECH 535 Semester Project</a></p>
-  <p class="eyebrow">FINTECH 535 &middot; Final project &middot; Closing the loop</p>
+  <p class="eyebrow">FINTECH 535 &middot; Final Cycle homework &middot; Closing the loop</p>
   <h1>Sleeper / Striker</h1>
   <p class="sub">A nightly options algorithm. When the options tape is quiet it sells premium (Sleeper). When somebody starts placing
     irregular, one-sided bets it switches modes and follows them (Striker). Every night it writes <code>open_orders.json</code> for Sanji.</p>
@@ -156,7 +156,7 @@
     <div class="step"><b>6 &middot; Write</b>Check every order against the Sanji spec and the no-naked-short rule, then write <code>open_orders.json</code>.</div>
   </div>
 
-  <h3>Step 2: the scanner (<code>final/signals.py</code>)</h3>
+  <h3>Step 2: the scanner (<code>final-cycle/signals.py</code>)</h3>
   <p>The scanner looks at contracts expiring in 1-30 days with strikes within &plusmn;25% of spot. For each contract it computes the mid, Black-Scholes
     delta / gamma / vega / theta from that contract's IV, and the dollar premium traded (<code>volume &times; mid &times; 100</code>).</p>
   <div class="tablewrap"><table>
@@ -222,7 +222,7 @@
 
   <h3>How Sanji fills a limit, and how we choose ours</h3>
   <p>A limit buy fills at the open if the open is already at or below the limit; otherwise it fills at the limit <i>if the day's low trades through it</i>.
-    Sells mirror that with the high. So for every limit, <code>final/pricing.py</code> simulates 3,000 versions of tomorrow from tonight's close:
+    Sells mirror that with the high. So for every limit, <code>final-cycle/pricing.py</code> simulates 3,000 versions of tomorrow from tonight's close:
     an overnight gap, then the session in 15-minute steps, with the option valued by Black-Scholes along each path. That gives a distribution of the
     option's open, high and low, and for every candidate price we count how often Sanji would fill it. We keep the best price that still meets a fill target.</p>
   <p><b>The tilt:</b> 30% of today's move is assumed to carry into tomorrow. If the stock sold off today and we're buying calls, the paths drift lower,
@@ -254,7 +254,7 @@
    "underlying": 76792991, "contract": "call", "expiry": "2026-11-27", "strike": 440.0, "ref": "open", "lmt_prc": 4.15}
 ]</pre>
   <p class="small muted">Illustrative: a Striker entry, then the short leg sold against it the next night. Tonight's real orders, with each limit's fill odds and distance from mid, are at the top of the page.
-    Every order also goes through a local copy of the Sanji rules (<code>final/sanji.py</code>); one that would be rejected is dropped and logged.</p>
+    Every order also goes through a local copy of the Sanji rules (<code>final-cycle/sanji.py</code>); one that would be rejected is dropped and logged.</p>
 
   <h3>Does smarter pricing pay? (test market, all seeds)</h3>
   <div class="tablewrap" id="bt-pricing"><p class="muted">Loading backtest&hellip;</p></div>
@@ -271,7 +271,7 @@
 <section id="testing">
   <h2>Testing &amp; backtest</h2>
   <p>Free sources don't keep historical option chains with volume and OI, so I can't backtest this on real flow. Instead I built a test market
-    (<code>final/sim.py</code>): a stock path plus a full option chain every night, with irregular days planted on purpose. The backtest then runs the
+    (<code>final-cycle/sim.py</code>): a stock path plus a full option chain every night, with irregular days planted on purpose. The backtest then runs the
     <i>exact</i> nightly functions on it and fills the orders the way Sanji describes, on each option's intraday bar. Market orders (and limits that
     fill right at the open) pay half the bid/ask. A resting limit that the day's low or high trades through fills at the limit. Plus $0.65 a contract.</p>
   <div class="tablewrap"><table>
@@ -305,7 +305,7 @@
     VRP (which is wider than this test market's) pays for it. One switch (<code>sleeper_enabled</code> in <code>signals.Config</code>) turns the algo
     into Striker-only.</div>
 
-  <h3>Unit tests (<code>final/tests/test_algo.py</code>, 40 tests, run before every nightly run)</h3>
+  <h3>Unit tests (<code>final-cycle/tests/test_algo.py</code>, 40 tests, run before every nightly run)</h3>
   <ul class="small">
     <li><b>Greeks:</b> put-call parity, delta ordering, IV solver round-trip.</li>
     <li><b>Hand-built chains with known answers:</b> a call sweep at the ask is bullish; the <i>same</i> contracts hit at the bid are not; a put sweep is bearish; straddle buying is
@@ -325,21 +325,21 @@
 <section id="plumbing">
   <h2>The nightly job</h2>
   <p>Modeled on the course's <code>oi-plots.yml</code>. <code>.github/workflows/nightly.yml</code> runs at 03:00 UTC (10pm EST), Monday-Friday nights:</p>
-<pre>checkout &rarr; setup Python 3.11 &rarr; pip install -r final/requirements.txt
-&rarr; pytest final/tests          # if the algo is broken, no orders go out
-&rarr; python final/algo.py        # LSEG_APP_KEY / USERNAME / PASSWORD passed in if the secrets exist
-&rarr; git-auto-commit: open_orders.json, final/data/*.json
+<pre>checkout &rarr; setup Python 3.11 &rarr; pip install -r final-cycle/requirements.txt
+&rarr; pytest final-cycle/tests          # if the algo is broken, no orders go out
+&rarr; python final-cycle/algo.py        # LSEG_APP_KEY / USERNAME / PASSWORD passed in if the secrets exist
+&rarr; git-auto-commit: open_orders.json, final-cycle/data/*.json
 &rarr; request a GitHub Pages rebuild so this page shows tonight's run</pre>
   <div class="tablewrap"><table>
     <tr><th>File</th><th>What it is</th></tr>
     <tr><td><code>open_orders.json</code></td><td>The orders for the next session (repo root)</td></tr>
-    <tr><td><code>final/algo.py</code></td><td>The nightly entry point (<code>--demo</code> runs it on fake data in a temp folder)</td></tr>
-    <tr><td><code>final/signals.py</code></td><td>Greeks, scanner, decision rule (no I/O)</td></tr>
-    <tr><td><code>final/book.py</code></td><td>Order builder, exits, positions reader, ledger</td></tr>
-    <tr><td><code>final/sanji.py</code></td><td>Order validator and token resolver, from the spec</td></tr>
-    <tr><td><code>final/data_sources.py</code></td><td>CBOE / yfinance / LSEG / price_history.json</td></tr>
-    <tr><td><code>final/sim.py</code>, <code>final/backtest.py</code></td><td>Test market and backtest (writes <code>final/data/backtest.json</code>)</td></tr>
-    <tr><td><code>final/data/*.json</code></td><td>latest run, IV history, ledger, run log, backtest results</td></tr>
+    <tr><td><code>final-cycle/algo.py</code></td><td>The nightly entry point (<code>--demo</code> runs it on fake data in a temp folder)</td></tr>
+    <tr><td><code>final-cycle/signals.py</code></td><td>Greeks, scanner, decision rule (no I/O)</td></tr>
+    <tr><td><code>final-cycle/book.py</code></td><td>Order builder, exits, positions reader, ledger</td></tr>
+    <tr><td><code>final-cycle/sanji.py</code></td><td>Order validator and token resolver, from the spec</td></tr>
+    <tr><td><code>final-cycle/data_sources.py</code></td><td>CBOE / yfinance / LSEG / price_history.json</td></tr>
+    <tr><td><code>final-cycle/sim.py</code>, <code>final-cycle/backtest.py</code></td><td>Test market and backtest (writes <code>final-cycle/data/backtest.json</code>)</td></tr>
+    <tr><td><code>final-cycle/data/*.json</code></td><td>latest run, IV history, ledger, run log, backtest results</td></tr>
   </table></div>
   <p class="small"><b>About LSEG:</b> the course workflow uses the professor's LSEG keys stored as secrets in <i>his</i> repo, and GitHub doesn't share
     secrets between repos. My homeworks used a desktop Workspace session, which needs the app running on a laptop. So this job runs without LSEG,
@@ -420,7 +420,7 @@ getJSON("data/latest.json").then((L) => {
 
 // ---------------------------------------------------------------- backtest
 getJSON("data/backtest.json").then((B) => {
-  if (!B) { $("#bt-detect").innerHTML = "<p class='muted'>Run <code>python final/backtest.py</code> to fill this in.</p>"; return; }
+  if (!B) { $("#bt-detect").innerHTML = "<p class='muted'>Run <code>python final-cycle/backtest.py</code> to fill this in.</p>"; return; }
   const D = B.detection, S = B.summary, O = B.striker_by_outcome;
   const tiles = [
     ["Informed nights caught", pct(D.catch_rate), "Striker fired in the planted direction"],

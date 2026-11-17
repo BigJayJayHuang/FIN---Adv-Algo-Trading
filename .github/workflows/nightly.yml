@@ -31,10 +31,10 @@ jobs:
           python-version: "3.11"
 
       - name: Install dependencies
-        run: pip install -r final/requirements.txt
+        run: pip install -r final-cycle/requirements.txt
 
       - name: Test the algo before trusting it
-        run: python -m pytest final/tests -q
+        run: python -m pytest final-cycle/tests -q
 
       - name: Run the algo
         env:
@@ -43,7 +43,7 @@ jobs:
           LSEG_APP_KEY: ${{ secrets.LSEG_APP_KEY }}
           LSEG_USERNAME: ${{ secrets.LSEG_USERNAME }}
           LSEG_PASSWORD: ${{ secrets.LSEG_PASSWORD }}
-        run: python final/algo.py
+        run: python final-cycle/algo.py
 
       - name: Commit and push open orders
         uses: stefanzweifel/git-auto-commit-action@v5
@@ -51,7 +51,7 @@ jobs:
           commit_message: "Update open orders"
           file_pattern: |
             open_orders.json
-            final/data/*.json
+            final-cycle/data/*.json
 
       - name: Rebuild the Pages site
         # Pushes made with GITHUB_TOKEN may not start a Pages build on their own.

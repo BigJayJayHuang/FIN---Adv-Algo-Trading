@@ -1,5 +1,5 @@
 """
-Run:  python -m pytest final/tests -q
+Run:  python -m pytest final-cycle/tests -q
 
 Three layers:
   1. hand-built chains where we know the answer exactly
@@ -432,4 +432,4 @@ def test_nightly_job_end_to_end(tmp_path):
     assert modes["NVDA"] != "STRIKER"                                  # planted straddle noise
     assert any(o["underlying"] == 76792991 and o["action"] == "BUY" and o["contract"] == "call" for o in orders)
     assert all(isinstance(o["strike"], float) and len(o["expiry"]) == 10 for o in orders)   # exact contracts
-    assert (root / "final" / "data" / "latest.json").exists()
+    assert (root / "final-cycle" / "data" / "latest.json").exists()

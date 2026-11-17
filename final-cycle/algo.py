@@ -2,12 +2,12 @@
 """
 Nightly job: inputs in, open orders out.
 
-    python final/algo.py            # live: real data, writes open_orders.json at the repo root
-    python final/algo.py --demo     # fake data from sim.py, writes into a temp folder only
+    python final-cycle/algo.py            # live: real data, writes open_orders.json at the repo root
+    python final-cycle/algo.py --demo     # fake data from sim.py, writes into a temp folder only
 
 Steps
   1. work out the next session (the `for` date) and the last completed one (`asof`)
-  2. for each ticker in final/config.json: pull the option chain + daily closes,
+  2. for each ticker in final-cycle/config.json: pull the option chain + daily closes,
      run signals.scan() and signals.decide()
   3. read mkt/positions.json (Sanji's book): exits, plus follow-ups (leg the
      short into a filled long, re-try a short leg that didn't fill)
@@ -17,10 +17,10 @@ Steps
      safe, a limit price from pricing.py
   5. validate every order against the Sanji spec, then write
        open_orders.json                 the orders (repo root)
-       final/data/latest.json           tonight's signals, decisions, orders (for the site)
-       final/data/iv_history.json       ATM IV by night (IV rank / IV pop need this)
-       final/data/ledger.json           what we sent (stand-in until positions.json exists)
-       final/data/runs.json             one line per night
+       final-cycle/data/latest.json           tonight's signals, decisions, orders (for the site)
+       final-cycle/data/iv_history.json       ATM IV by night (IV rank / IV pop need this)
+       final-cycle/data/ledger.json           what we sent (stand-in until positions.json exists)
+       final-cycle/data/runs.json             one line per night
 """
 from __future__ import annotations
 
@@ -117,7 +117,7 @@ def demo_inputs(universe, asof: date):
 
 def run(root: str, now: datetime, demo: bool = False, cfg: Config | None = None, pricing: str = "smart") -> dict:
     cfg = cfg or Config()
-    data_dir = os.path.join(root, "final", "data")
+    data_dir = os.path.join(root, "final-cycle", "data")
     conf = read_json(os.path.join(HERE, "config.json"), {})
     universe = conf.get("universe", [])
     price_history = read_json(os.path.join(root, "price_history.json"), {})

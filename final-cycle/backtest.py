@@ -14,8 +14,8 @@ the orders the next day with Sanji's rule, on the option's intraday bar:
 Variants: pricing "smart" (simulated-fill limits) vs "market" (everything at
 market), for the full algo and for each mode alone.
 
-    python final/backtest.py              # 20 seeds, writes final/data/backtest.json
-    python final/backtest.py --seeds 3    # quick run
+    python final-cycle/backtest.py              # 20 seeds, writes final-cycle/data/backtest.json
+    python final-cycle/backtest.py --seeds 3    # quick run
 """
 from __future__ import annotations
 
