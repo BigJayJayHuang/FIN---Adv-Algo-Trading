@@ -30,6 +30,7 @@ from signals import bs_price
 DAY_TYPES = ["normal", "informed_bull", "informed_bear", "hedge_noise", "iv_only"]
 DAY_PROBS = [0.74, 0.07, 0.07, 0.06, 0.06]
 FOLLOW_THROUGH = 0.70
+INTRADAY_STEPS = 26
 
 
 def business_days(start: date, n: int) -> list[date]:
@@ -65,6 +66,7 @@ class Market:
         types[:25] = ["normal"] * 25              # warm-up for realized vol / IV history
 
         self.days: list[Day] = []
+        self.paths: list[np.ndarray] = []
         close, iv_level = s0, base_vol * 1.12
         drift_left, drift_dir = 0, 0
         for i, d in enumerate(self.dates):
@@ -77,8 +79,14 @@ class Market:
             gap = 0.4 * ret + 0.002 * rng.standard_normal()
             o = close * math.exp(gap)
             c = o * math.exp(ret - gap)
-            hi = max(o, c) * (1 + abs(rng.normal(0, 0.006)))
-            lo = min(o, c) * (1 - abs(rng.normal(0, 0.006)))
+            # intraday path: a Brownian bridge from the open to the close, 15-minute steps
+            sd = vol / math.sqrt(252) * math.sqrt(0.7 / INTRADAY_STEPS)
+            w = np.concatenate([[0.0], np.cumsum(rng.standard_normal(INTRADAY_STEPS) * sd)])
+            frac = np.linspace(0, 1, INTRADAY_STEPS + 1)
+            bridge = w - frac * w[-1]
+            path = np.exp(math.log(o) + frac * (math.log(c) - math.log(o)) + bridge)
+            self.paths.append(path)
+            hi, lo = float(path.max()), float(path.min())
             close = c
 
             # IV: mean-reverts to ~12% over base vol, jumps on event nights
@@ -120,6 +128,18 @@ class Market:
             return max(0.0, (spot - k) if is_call else (k - spot))
         iv = self.iv_at(day.atm_iv, spot, k, dte)
         return float(bs_price(spot, k, dte / 365, iv, is_call))
+
+    def option_bar(self, i_day: int, k: float, expiry: date, is_call: bool):
+        """The option's open / high / low / close on day i, valued along the intraday path."""
+        day = self.days[i_day]
+        path = self.paths[i_day]
+        dte_open = (expiry - day.date).days + 0.75
+        if dte_open <= 0.75 and expiry == day.date:
+            dte_open = 0.27
+        T = np.maximum(dte_open - np.linspace(0, 0.27, len(path)), 1 / 24) / 365
+        iv = np.array([self.iv_at(day.atm_iv, s, k, max(dte_open, 0.5)) for s in path])
+        v = bs_price(path, k, T, iv, is_call)
+        return float(v[0]), float(v.max()), float(v.min()), float(v[-1])
 
     # ------------------------------------------------------------------
     def chain(self, i: int) -> pd.DataFrame:

@@ -9,10 +9,12 @@ Steps
   1. work out the next session (the `for` date) and the last completed one (`asof`)
   2. for each ticker in final/config.json: pull the option chain + daily closes,
      run signals.scan() and signals.decide()
-  3. read mkt/positions.json (Sanji's book) and write closing orders where an
-     exit rule fires
+  3. read mkt/positions.json (Sanji's book): exits, plus follow-ups (leg the
+     short into a filled long, re-try a short leg that didn't fill)
   4. write entry orders for tickers the course server prices (they must be
-     in price_history.json with bars), never stacking a second idea on a ticker
+     in price_history.json with bars), never stacking a second idea on a ticker.
+     Each order names an exact contract from tonight's chain and, where it is
+     safe, a limit price from pricing.py
   5. validate every order against the Sanji spec, then write
        open_orders.json                 the orders (repo root)
        final/data/latest.json           tonight's signals, decisions, orders (for the site)
@@ -39,7 +41,7 @@ import pandas as pd                                                    # noqa: E
 import book                                                            # noqa: E402
 import data_sources as ds                                              # noqa: E402
 from sanji import needs_chain_snapshot                                 # noqa: E402
-from signals import Config, scan, decide                               # noqa: E402
+from signals import Config, scan, decide, prepare_chain                # noqa: E402
 
 ET = ZoneInfo("America/New_York")
 NYSE_HOLIDAYS = {date.fromisoformat(d) for d in [
@@ -113,7 +115,7 @@ def demo_inputs(universe, asof: date):
     return out
 
 
-def run(root: str, now: datetime, demo: bool = False, cfg: Config | None = None) -> dict:
+def run(root: str, now: datetime, demo: bool = False, cfg: Config | None = None, pricing: str = "smart") -> dict:
     cfg = cfg or Config()
     data_dir = os.path.join(root, "final", "data")
     conf = read_json(os.path.join(HERE, "config.json"), {})
@@ -127,7 +129,7 @@ def run(root: str, now: datetime, demo: bool = False, cfg: Config | None = None)
     warnings = []
     demo_data = demo_inputs(universe, asof) if demo else {}
 
-    tickers, decisions, spots = [], {}, {}
+    tickers, nights = [], {}
     for u in universe:
         sym, conid = u["symbol"], int(u["conid"])
         bars = (price_history.get(str(conid)) or {}).get("price_history") or {}
@@ -151,7 +153,8 @@ def run(root: str, now: datetime, demo: bool = False, cfg: Config | None = None)
             dec = decide(feat, cfg)
             row.update(data_source=d["source"], close_sources=close_src, extra=d.get("extra", {}),
                        feat=feat, decision=dec)
-            decisions[sym], spots[sym] = dec, spot
+            nights[sym] = {"decision": dec, "feat": feat, "spot": spot,
+                           "pc": prepare_chain(d["chain"], spot, asof, cfg)}
             if feat.get("atm_iv") and not demo:
                 h = [x for x in iv_hist_all.get(sym, []) if x["date"] != asof.isoformat()]
                 h.append({"date": asof.isoformat(), "atm_iv": feat["atm_iv"],
@@ -169,15 +172,16 @@ def run(root: str, now: datetime, demo: bool = False, cfg: Config | None = None)
     raw_pos = read_json(os.path.join(root, "mkt", "positions.json"), None)
     positions = book.parse_positions(raw_pos, by_conid)
     have_book = raw_pos is not None
-    exits, exit_notes = book.exit_orders(positions, decisions, spots, for_day)
+    fills = book.fill_status(read_json(os.path.join(root, "mkt", "fills.json"), []))
+    pricer = book.Pricer(pricing)
+    exits, exit_notes, follow_ledger = book.manage(positions, ledger, nights, for_day, pricer)
 
-    closing = {(o["underlying"], o["contract"], o["expiry"], float(o["strike"])) for o in exits}
-    open_after = {p["ticker"] for p in positions
-                  if (p["conid"], p["contract"], p["expiry"], float(p["strike"])) not in closing}
+    # one idea per ticker: anything held (or still working) blocks a new entry
+    open_after = {p["ticker"] for p in positions}
     if not have_book:
-        open_after |= book.ledger_open_tickers(ledger, for_day)
+        open_after |= book.ledger_open_tickers(ledger, for_day, fills)
 
-    entries_by = {}
+    entries_by, new_rows = {}, {}
     for row in tickers:
         dec = row.get("decision")
         if not dec or dec["mode"] == "IDLE":
@@ -188,11 +192,16 @@ def run(root: str, now: datetime, demo: bool = False, cfg: Config | None = None)
         if row["symbol"] in open_after:
             row["skip"] = "already holding an idea on this ticker"
             continue
-        os_ = book.entry_orders(row["symbol"], row["conid"], for_day, dec)
+        n = nights[row["symbol"]]
+        os_, lrows = book.plan_entry(row["symbol"], row["conid"], for_day, dec, n["feat"], n["pc"], n["spot"], pricer)
         if os_:
             entries_by[row["symbol"]] = os_
+            new_rows[row["symbol"]] = lrows
+        else:
+            row["skip"] = "no listed contract near the target strike"
     entries_by = book.cap_striker(entries_by)
     entries = [o for v in entries_by.values() for o in v]
+    entry_ledger = [r for t in entries_by for r in new_rows[t]]
 
     orders = exits + entries
     errs = book.check_all(orders)
@@ -200,6 +209,9 @@ def run(root: str, now: datetime, demo: bool = False, cfg: Config | None = None)
         warnings.extend(errs)
         bad = {e.split(":")[0] for e in errs}
         orders = [o for o in orders if o["id"] not in bad]
+    for oid in book.naked_risk(orders, positions):
+        warnings.append(f"{oid}: short leg without protection - dropped")
+        orders = [o for o in orders if o["id"] != oid]
     for o in orders:
         if needs_chain_snapshot(o):
             warnings.append(f"{o['id']} needs a chain snapshot Sanji may not have")
@@ -210,16 +222,17 @@ def run(root: str, now: datetime, demo: bool = False, cfg: Config | None = None)
     latest = {"generated_at": now_iso, "for": for_day.isoformat(), "asof": asof.isoformat(), "demo": demo,
               "lseg_enabled": ds.lseg_available(), "positions_file": have_book,
               "positions": positions, "exit_notes": exit_notes, "orders": orders,
+              "pricing_mode": pricing, "pricing": {k: v for k, v in pricer.info.items() if any(o["id"] == k for o in orders)},
               "tickers": tickers, "warnings": warnings, "config": cfg.to_dict()}
 
     write_json(os.path.join(root, "open_orders.json"), orders)
     write_json(os.path.join(data_dir, "latest.json"), latest)
     if not demo:
         write_json(os.path.join(data_dir, "iv_history.json"), iv_hist_all, indent=1)
-        for o in entries:
-            if not any(e["id"] == o["id"] for e in ledger):
-                ledger.append({"id": o["id"], "ticker": by_conid[o["underlying"]], "for": o["for"],
-                               "mode": o["id"].split("-")[1], "est_expiry": book.est_expiry(for_day).isoformat()})
+        sent = {o["id"] for o in orders}
+        for r in entry_ledger + follow_ledger:
+            if r["id"] in sent and not any(e["id"] == r["id"] for e in ledger):
+                ledger.append(r)
         write_json(os.path.join(data_dir, "ledger.json"), ledger[-500:], indent=1)
         runs = [r for r in read_json(os.path.join(data_dir, "runs.json"), []) if r.get("for") != for_day.isoformat()]
         runs.append({"generated_at": now_iso, "for": for_day.isoformat(), "n_orders": len(orders),

@@ -141,7 +141,9 @@ def _f(x, n=4):
 def price_features(closes: pd.Series):
     """Realized vol, trend and momentum from daily closes (oldest -> newest)."""
     c = pd.Series(closes, dtype=float).dropna()
-    out = {"rv20": None, "sma20": None, "ret5": None, "n_closes": int(len(c))}
+    out = {"rv20": None, "sma20": None, "ret5": None, "ret1": None, "n_closes": int(len(c))}
+    if len(c) >= 2:
+        out["ret1"] = float(c.iloc[-1] / c.iloc[-2] - 1.0)
     if len(c) >= 16:
         lr = np.log(c).diff().dropna().tail(20)
         out["rv20"] = float(lr.std(ddof=1) * math.sqrt(252))

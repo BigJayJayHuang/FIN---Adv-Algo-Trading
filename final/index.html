@@ -97,7 +97,7 @@
     irregular, one-sided bets it switches modes and follows them (Striker). Every night it writes <code>open_orders.json</code> for Sanji.</p>
   <nav class="toc">
     <a href="#tonight">Tonight's orders</a><a href="#why">Why this algo</a><a href="#how">How it works</a>
-    <a href="#orders">Orders &amp; Sanji</a><a href="#testing">Testing &amp; backtest</a><a href="#plumbing">The nightly job</a>
+    <a href="#orders">Orders &amp; pricing</a><a href="#testing">Testing &amp; backtest</a><a href="#plumbing">The nightly job</a>
     <a href="#history">Run history</a><a href="#limits">Limits</a>
   </nav>
 </header>
@@ -109,8 +109,9 @@
   <h2>Tonight</h2>
   <p class="lede" id="tonight-meta">Loading the latest run&hellip;</p>
   <div class="grid3" id="tickers"></div>
-  <h3>open_orders.json</h3>
-  <pre id="orders-json">[]</pre>
+  <h3>Tonight's orders</h3>
+  <div class="tablewrap" id="orders-table"></div>
+  <details><summary>open_orders.json</summary><pre id="orders-json">[]</pre></details>
   <div id="notes"></div>
 </section>
 
@@ -150,7 +151,9 @@
     <div class="arrow">&rarr;</div>
     <div class="step"><b>4 &middot; Manage</b>Read Sanji's <code>positions.json</code> and close anything whose exit rule fires.</div>
     <div class="arrow">&rarr;</div>
-    <div class="step"><b>5 &middot; Write</b>Validate every order against the Sanji spec, then write <code>open_orders.json</code>.</div>
+    <div class="step"><b>5 &middot; Price</b>Pick the exact contract, then a limit from 3,000 simulated versions of tomorrow, or market where speed matters.</div>
+    <div class="arrow">&rarr;</div>
+    <div class="step"><b>6 &middot; Write</b>Check every order against the Sanji spec and the no-naked-short rule, then write <code>open_orders.json</code>.</div>
   </div>
 
   <h3>Step 2: the scanner (<code>final/signals.py</code>)</h3>
@@ -199,37 +202,69 @@
       selling premium is dangerous and there's no side to follow. Or a quiet tape with no edge in the premium.</p></div>
   </div>
 
-  <h3>Step 4: exits (<code>book.exit_orders</code>)</h3>
+  <h3>Step 4: managing the book (<code>book.manage</code>)</h3>
   <ul>
     <li>Anything with &le; 1 day to expiry is closed.</li>
     <li>Any position is closed if a Striker signal fires the <i>other</i> way on that ticker.</li>
     <li>Striker longs: take profit at +100%, stop at -50%.</li>
     <li>Sleeper spreads: close once 50% of the credit is kept, or if spot crosses the short strike.</li>
-    <li>Only one idea per ticker at a time. Until Sanji publishes <code>positions.json</code>, a ledger of what was sent stops stacking.</li>
+    <li>Follow-ups: sell the short leg against a Striker long once it's filled, and re-try a Sleeper short that didn't fill (details under Orders).</li>
+    <li>Only one idea per ticker at a time. Until Sanji publishes <code>positions.json</code>, a ledger of what was sent (with <code>fills.json</code> once it exists) stops stacking.</li>
   </ul>
 </section>
 
 <!-- ======================================================= ORDERS -->
 <section id="orders">
-  <h2>Orders in Sanji</h2>
-  <p>At 10pm we can't see tomorrow's open, so entries name the contract relative to it. Two choices worth explaining:</p>
+  <h2>Orders: pricing ourselves</h2>
+  <p>Each order names an <b>exact contract</b> picked from tonight's chain: a numeric strike and a calendar expiry, chosen the way Sanji's
+    <code>pct:</code> and <code>5DTE+</code> would pick them. Most orders also carry a <b>numeric limit price</b>. Sanji resolves bare numbers without an option-chain
+    snapshot, which he doesn't have yet. <code>mid-0.05</code>-style limits and <code>delta:</code> strikes would be rejected until he does.</p>
+
+  <h3>How Sanji fills a limit, and how we choose ours</h3>
+  <p>A limit buy fills at the open if the open is already at or below the limit; otherwise it fills at the limit <i>if the day's low trades through it</i>.
+    Sells mirror that with the high. So for every limit, <code>final/pricing.py</code> simulates 3,000 versions of tomorrow from tonight's close:
+    an overnight gap, then the session in 15-minute steps, with the option valued by Black-Scholes along each path. That gives a distribution of the
+    option's open, high and low, and for every candidate price we count how often Sanji would fill it. We keep the best price that still meets a fill target.</p>
+  <p><b>The tilt:</b> 30% of today's move is assumed to carry into tomorrow. If the stock sold off today and we're buying calls, the paths drift lower,
+    the option's likely low is lower, and the bid comes down with it. If the stock is already running our way, the bid goes up instead of missing the move.</p>
+
+  <div class="tablewrap"><table>
+    <tr><th>Order</th><th>Pricing</th><th>Why</th></tr>
+    <tr><td>Striker entry</td><td><b>Market</b></td><td>A dip bid fills on the nights the bet is going wrong and misses the nights the stock gaps our way (tested below). Being in matters more than price.</td></tr>
+    <tr><td>Leg-in short (debit spread)</td><td><b>Limit</b>, 45% fill target</td><td>Sold the night <i>after</i> the long fills. We already own the long, so there's no hurry, and selling into strength is where patience pays.</td></tr>
+    <tr><td>Striker take-profit</td><td><b>Limit</b>, 55%</td><td>Already winning. If it doesn't fill, it's re-sent the next night.</td></tr>
+    <tr><td>Sleeper short + wing</td><td>Market</td><td>Tested both ways: limit sells only fill when the stock is falling into the spread, and two-thirds never fill and leave a wing we paid for. Market won.</td></tr>
+    <tr><td>Stops, expiry, signal against us, breach</td><td>Market</td><td>Getting out matters more than price</td></tr>
+  </table></div>
+
+  <p class="small">Each is a switch in <code>pricing.PricingConfig</code>: <code>striker_style</code> = market / protected / dip / split, <code>sleeper_style</code> = market / limit.</p>
+
+  <h3>Legging rule: a short option never goes out on its own</h3>
   <ul>
-    <li><b>Strikes are <code>pct:</code> tokens sized off the expected move</b> (ATM IV &times; &radic;(7/365)), not <code>otm:n</code>. TSLA lists $2.50 or $5 strikes
-      and MSFT different ones, so "2 strikes out" means a different distance on each. <code>pct:-9</code> means the same thing everywhere. <code>delta:</code>
-      would be nicer, but Sanji rejects it until he has chain snapshots.</li>
-    <li><b>Everything is a market order.</b> Sanji fills each order all-or-nothing on its own, so a limit on one leg of a spread could fill without
-      the other and leave a naked short. <code>mid</code> limits also need a chain snapshot.</li>
+    <li>Sleeper (if switched to limits): the wing is a market buy (always fills) and the short is a limit. Worst case the short doesn't fill and we hold a cheap wing,
+      which the next night re-tries the short against or sells.</li>
+    <li>Striker debit spread: only the long goes out. Once <code>positions.json</code> shows we own it, the short is sold against it.</li>
+    <li>Closing a spread patiently covers the short first. The long left behind is handled the next night. Urgent closes send every leg at market.</li>
+    <li>Every order set passes a <code>naked_risk</code> check before it's written.</li>
   </ul>
 <pre>[
-  {"id": "tsla-striker-long-2026-11-17",  "for": "2026-11-17", "order_type": "mkt", "action": "BUY",
-   "qty": 3, "underlying": 76792991, "contract": "call", "expiry": "5DTE+", "strike": "pct:2", "ref": "open"},
-  {"id": "msft-sleeper-short-2026-11-17", "for": "2026-11-17", "order_type": "mkt", "action": "SHT",
-   "qty": 1, "underlying": 272093, "contract": "put", "expiry": "5DTE+", "strike": "pct:-5", "ref": "open"},
-  {"id": "msft-sleeper-wing-2026-11-17",  "for": "2026-11-17", "order_type": "mkt", "action": "BUY",
-   "qty": 1, "underlying": 272093, "contract": "put", "expiry": "5DTE+", "strike": "pct:-9", "ref": "open"}
+  {"id": "tsla-striker-long-2026-11-17",  "for": "2026-11-17", "order_type": "mkt", "action": "BUY", "qty": 3,
+   "underlying": 76792991, "contract": "call", "expiry": "2026-11-27", "strike": 410.0, "ref": "open"},
+  {"id": "tsla-striker-legin-2026-11-18", "for": "2026-11-18", "order_type": "lmt", "action": "SHT", "qty": 3,
+   "underlying": 76792991, "contract": "call", "expiry": "2026-11-27", "strike": 440.0, "ref": "open", "lmt_prc": 4.15}
 ]</pre>
-  <p class="small muted">Exits use the exact <code>expiry</code> date and numeric <code>strike</code> from <code>positions.json</code>, with <code>SEL</code> / <code>BTC</code>.
-    Every order goes through a local copy of the Sanji rules (<code>final/sanji.py</code>) before it's written. An order that would be rejected is dropped and logged.</p>
+  <p class="small muted">Illustrative: a Striker entry, then the short leg sold against it the next night. Tonight's real orders, with each limit's fill odds and distance from mid, are at the top of the page.
+    Every order also goes through a local copy of the Sanji rules (<code>final/sanji.py</code>); one that would be rejected is dropped and logged.</p>
+
+  <h3>Does smarter pricing pay? (test market, all seeds)</h3>
+  <div class="tablewrap" id="bt-pricing"><p class="muted">Loading backtest&hellip;</p></div>
+  <p class="small muted" id="bt-pricing-note"></p>
+  <h3>How each kind of order filled (full algo, smart pricing)</h3>
+  <div class="tablewrap" id="bt-fills"></div>
+  <h3>Is the fill model honest?</h3>
+  <div class="tablewrap" id="bt-calib"></div>
+  <p class="small muted">Predicted fill probability vs how often the order actually filled in the backtest. The model runs optimistic, because it doesn't know
+    IV tends to fall back after a spike, or that informed moves keep going.</p>
 </section>
 
 <!-- ======================================================= TESTING -->
@@ -237,8 +272,8 @@
   <h2>Testing &amp; backtest</h2>
   <p>Free sources don't keep historical option chains with volume and OI, so I can't backtest this on real flow. Instead I built a test market
     (<code>final/sim.py</code>): a stock path plus a full option chain every night, with irregular days planted on purpose. The backtest then runs the
-    <i>exact</i> nightly functions on it and fills the orders the way Sanji describes: tokens resolve at the open, market orders pay half the spread,
-    plus $0.65 a contract.</p>
+    <i>exact</i> nightly functions on it and fills the orders the way Sanji describes, on each option's intraday bar. Market orders (and limits that
+    fill right at the open) pay half the bid/ask. A resting limit that the day's low or high trades through fills at the limit. Plus $0.65 a contract.</p>
   <div class="tablewrap"><table>
     <tr><th>Planted night</th><th>What's in the chain</th><th>The right answer</th></tr>
     <tr><td>normal</td><td>ordinary two-sided volume, the odd random big print, IV ~12% over realized</td><td>Sleeper or Idle, never Striker</td></tr>
@@ -257,7 +292,7 @@
   <div class="chart card" id="eq-chart"><div class="tip" id="eq-tip"></div></div>
   <p class="small muted" id="eq-caption"></p>
 
-  <h3>Each mode alone vs. together (all seeds)</h3>
+  <h3>Each mode alone vs. together (all seeds, smart pricing)</h3>
   <div class="tablewrap" id="bt-ablation"></div>
 
   <div class="callout small"><b>How to read this.</b> In the test market the informed flow predicts the move by construction, so these
@@ -270,14 +305,18 @@
     VRP (which is wider than this test market's) pays for it. One switch (<code>sleeper_enabled</code> in <code>signals.Config</code>) turns the algo
     into Striker-only.</div>
 
-  <h3>Unit tests (<code>final/tests/test_algo.py</code>, 32 tests, run before every nightly run)</h3>
+  <h3>Unit tests (<code>final/tests/test_algo.py</code>, 40 tests, run before every nightly run)</h3>
   <ul class="small">
     <li><b>Greeks:</b> put-call parity, delta ordering, IV solver round-trip.</li>
     <li><b>Hand-built chains with known answers:</b> a call sweep at the ask is bullish; the <i>same</i> contracts hit at the bid are not; a put sweep is bearish; straddle buying is
       irregular but stands aside; an IV spike alone never strikes; one big print isn't enough; quiet + rich IV sells a put spread; empty chains and missing IVs don't crash.</li>
     <li><b>Planted scenarios &times; 12 seeds:</b> normal nights never strike; informed nights are always seen (&ge; 3 irregular contracts, flow sign correct), &ge; 75% strike and never the wrong way; hedge noise is flagged but at most 1 in 12 strikes; IV-only nights never strike.</li>
     <li><b>Sanji:</b> the spec's own example validates; 10 kinds of illegal order are rejected; the token resolver matches the spec wording (ATM ties go lower, puts OTM is down, 5DTE+/5DTE-/W+/M+).</li>
-    <li><b>Book:</b> every structure builds legal orders; each exit rule fires when it should and stays quiet when it shouldn't; positions.json read in several shapes.</li>
+    <li><b>Orders:</b> every structure builds legal orders on exact contracts, under both pricing modes; no short option ever goes out without its protection (a limit wing doesn't count).</li>
+    <li><b>Pricing:</b> Sanji's fill rule (open already through, or the day's low/high trading through); a higher fill target pays more but never above the ask;
+      a stock sliding into the open gets a lower bid than one rising; tick rounding; each Striker style (market, dip, protected, split) behaves as described.</li>
+    <li><b>Managing the book:</b> take-profit goes out as a limit, urgent exits at market; a credit spread covers its short first; the leg-in short is sold only against a long we own;
+      an orphan wing re-tries its short or gets sold; positions.json read in several shapes.</li>
     <li><b>Calendar &amp; end-to-end:</b> Monday night &rarr; Tuesday, Wednesday before Thanksgiving &rarr; Friday, Friday &rarr; Monday; the whole nightly job on demo data writes a valid <code>open_orders.json</code>.</li>
   </ul>
 </section>
@@ -320,7 +359,9 @@
     <li><b>Aggressor is estimated from the last print</b> versus the bid/ask. Real flow tools use every trade. With LSEG time-and-sales this would be much sharper.</li>
     <li><b>Thresholds are set on the test market.</b> The nightly page logs the raw irregular share, flow score and IV, so after a few weeks they can be tuned on real nights.</li>
     <li><b>Delayed, end-of-day data.</b> The orders fill at tomorrow's open, so a whole night of news sits between signal and fill.</li>
-    <li><b>Things to ask for in Sanji:</b> <code>delta:</code> strikes (needs chain snapshots), and a multi-leg order so a spread fills as one unit.</li>
+    <li><b>Things to ask for in Sanji:</b> <code>delta:</code> strikes and <code>mid&plusmn;x</code> limits (both need chain snapshots; a limit relative to the open would adjust for the overnight gap),
+      and multi-leg orders so a spread fills as one unit. That would let Sleeper use limits safely.</li>
+    <li><b>The fill model runs optimistic</b> (see the calibration table). It could learn a correction from the live <code>fills.json</code> once Sanji is resolving orders.</li>
   </ul>
 </section>
 </main>
@@ -346,6 +387,13 @@ getJSON("data/latest.json").then((L) => {
     + (L.demo ? " &middot; <b>DEMO DATA</b>" : "") + (L.lseg_enabled ? " &middot; LSEG on" : "")
     + ` &middot; ${L.positions_file ? "positions.json read" : "no positions.json yet (using the order ledger)"}`;
   $("#orders-json").textContent = JSON.stringify(L.orders, null, 2);
+  const P = L.pricing || {};
+  $("#orders-table").innerHTML = L.orders.length ? `<table><tr><th>Order</th><th>Contract</th><th class="n">Qty</th><th>Type</th><th class="n">Tonight bid / ask</th><th class="n">Our limit</th><th class="n">Fill odds</th><th class="n">vs mid</th></tr>`
+    + L.orders.map((o) => { const p = P[o.id] || {};
+      return `<tr><td>${esc(o.id)}</td><td>${o.action} ${esc(o.expiry)} ${o.strike} ${o.contract}</td><td class="n">${o.qty}</td><td>${o.order_type}</td>`
+        + `<td class="n">${p.tonight_bid != null ? num(p.tonight_bid) + " / " + num(p.tonight_ask) : "-"}</td><td class="n">${o.lmt_prc != null ? num(o.lmt_prc) : "market"}</td>`
+        + `<td class="n">${p.fill_prob != null ? pct(p.fill_prob) : "-"}</td><td class="n">${p.edge_vs_mid != null ? (p.edge_vs_mid > 0 ? "+" : "") + pct(p.edge_vs_mid, 1) : "-"}</td></tr>`; }).join("") + "</table>"
+    : "<p class='muted'>No orders tonight.</p>";
   $("#tickers").innerHTML = L.tickers.map((t) => {
     const d = t.decision || { mode: "ERROR" }, f = t.feat || {};
     if (t.error) return `<div class="card"><h3 style="margin-top:0">${esc(t.symbol)} <span class="badge b-ERROR">NO DATA</span></h3><p class="small muted">${esc(t.error)}</p></div>`;
@@ -379,22 +427,36 @@ getJSON("data/backtest.json").then((B) => {
     ["Wrong-way strikes", D.wrong_way, "Striker against the planted flow"],
     ["False alarms", pct(D.false_alarm_rate, 1), "Striker on normal / straddle / IV-only nights"],
     ["Striker precision", pct(D.precision, 1), "share of all strikes that were real"],
-    ["Mean return, full algo", pct(S.full.mean_return, 1), `${B.seeds} simulated years, worst drawdown avg ${pct(S.full.mean_max_dd, 1)}`],
+    ["Mean return, full algo", pct(S.full_smart.mean_return, 1), `${B.seeds} simulated years, worst drawdown avg ${pct(S.full_smart.mean_max_dd, 1)}`],
     ["Striker win rate when the move came", pct(O.informed_worked.win_rate), `vs ${pct(O.informed_fizzled.win_rate)} when it fizzled`],
   ];
   $("#bt-stats").innerHTML = tiles.map(([k, v, s]) => `<div class="card"><div class="small muted">${k}</div><div class="stat">${v}</div><div class="small muted">${s}</div></div>`).join("");
   $("#bt-detect").innerHTML = `<table><tr><th>Planted night</th><th class="n">Nights</th><th class="n">Striker &uarr;</th><th class="n">Striker &darr;</th><th class="n">Sleeper</th><th class="n">Idle</th></tr>`
     + D.rows.map((r) => `<tr><td>${r.day_type.replace("_", " ")}</td><td class="n">${r.nights}</td><td class="n">${r.striker_up}</td><td class="n">${r.striker_down}</td><td class="n">${r.sleeper}</td><td class="n">${r.idle}</td></tr>`).join("")
     + `</table><p class="small muted">${B.seeds} seeds &times; ${B.days_per_seed - B.warmup - 1} nights. ${B.n_order_problems} orders failed validation or couldn't be resolved.</p>`;
-  const names = { full: "Sleeper + Striker", sleeper_only: "Sleeper only", striker_only: "Striker only" };
-  $("#bt-ablation").innerHTML = `<table><tr><th>Variant</th><th class="n">Mean return</th><th class="n">Median</th><th class="n">Years positive</th><th class="n">Avg max DD</th><th class="n">Avg Sharpe</th><th class="n">Striker trades / win</th><th class="n">Sleeper trades / win</th></tr>`
-    + Object.entries(S).map(([k, s]) => `<tr><td>${names[k]}</td><td class="n">${pct(s.mean_return, 1)}</td><td class="n">${pct(s.median_return, 1)}</td><td class="n">${pct(s.pct_seeds_positive)}</td><td class="n">${pct(s.mean_max_dd, 1)}</td><td class="n">${num(s.mean_sharpe)}</td>`
-      + `<td class="n">${s.modes.STRIKER.n} / ${pct(s.modes.STRIKER.win_rate)}</td><td class="n">${s.modes.SLEEPER.n} / ${pct(s.modes.SLEEPER.win_rate)}</td></tr>`).join("") + "</table>";
+  const names = { full_smart: "Sleeper + Striker, smart pricing (default)", full_market: "Sleeper + Striker, all market",
+    sleeper_smart: "Sleeper only (market)", striker_smart: "Striker only, smart (market entry, limit leg-in &amp; take-profit)",
+    striker_market: "Striker only, all market", sleeper_limit: "Sleeper only, limit sells", striker_dip: "Striker only, dip limit entry", striker_protected: "Striker only, protected limit entry" };
+  const row = (k, s) => `<tr><td>${names[k] || k}</td><td class="n">${pct(s.mean_return, 1)}</td><td class="n">${pct(s.median_return, 1)}</td><td class="n">${pct(s.pct_seeds_positive)}</td><td class="n">${pct(s.mean_max_dd, 1)}</td><td class="n">${num(s.mean_sharpe)}</td>`
+      + `<td class="n">${s.modes.STRIKER.n}/${s.modes.STRIKER.sent} &middot; ${pct(s.modes.STRIKER.win_rate)}</td><td class="n">${s.modes.SLEEPER.n}/${s.modes.SLEEPER.sent} &middot; ${pct(s.modes.SLEEPER.win_rate)}</td></tr>`;
+  const head = `<table><tr><th>Variant</th><th class="n">Mean return</th><th class="n">Median</th><th class="n">Years positive</th><th class="n">Avg max DD</th><th class="n">Avg Sharpe</th><th class="n">Striker filled/sent &middot; win</th><th class="n">Sleeper filled/sent &middot; win</th></tr>`;
+  $("#bt-ablation").innerHTML = head + ["full_smart", "sleeper_smart", "striker_smart"].filter((k) => S[k]).map((k) => row(k, S[k])).join("") + "</table>";
+  $("#bt-pricing").innerHTML = head + ["full_smart", "full_market", "striker_smart", "striker_market", "striker_dip", "striker_protected", "sleeper_smart", "sleeper_limit"]
+    .filter((k) => S[k]).map((k) => row(k, S[k])).join("") + "</table>";
+  const F = S.full_smart.fills;
+  $("#bt-fills").innerHTML = `<table><tr><th>Order</th><th class="n">Sent</th><th class="n">Filled</th><th class="n">Avg fill vs tonight's mid</th></tr>`
+    + Object.entries(F).map(([c, f]) => `<tr><td>${c}</td><td class="n">${f.sent.toLocaleString()}</td><td class="n">${pct(f.fill_rate)}</td><td class="n">${f.avg_vs_mid == null ? "-" : (f.avg_vs_mid > 0 ? "+" : "") + pct(f.avg_vs_mid, 1)}</td></tr>`).join("")
+    + `</table><p class="small muted">"vs mid" is in our favour when positive: bought below, or sold above, the mid we saw the night before.</p>`;
+  if (B.fill_calibration) $("#bt-calib").innerHTML = `<table><tr><th>Model said</th><th class="n">Orders</th><th class="n">Predicted</th><th class="n">Actually filled</th></tr>`
+    + B.fill_calibration.map((c) => `<tr><td>${c.bucket}</td><td class="n">${c.n.toLocaleString()}</td><td class="n">${pct(c.predicted)}</td><td class="n">${pct(c.realized)}</td></tr>`).join("") + "</table>";
+  const sd = S.striker_dip, sm = S.striker_smart;
+  if (sd && sm) $("#bt-pricing-note").innerHTML = `Bidding for a dip on Striker entries: ${pct(sd.mean_return, 1)} a year vs ${pct(sm.mean_return, 1)} at market. `
+    + `Only ${sd.modes.STRIKER.n} of ${sd.modes.STRIKER.sent} dip bids filled, and the ones that did were mostly the nights the move didn't come.`;
   drawEquity(B.seed0);
 });
 
 function drawEquity(s0) {
-  const series = [["full", "Sleeper + Striker", "var(--s1)"], ["sleeper_only", "Sleeper only", "var(--s2)"], ["striker_only", "Striker only", "var(--s3)"]];
+  const series = [["full_smart", "Smart pricing", "var(--s1)"], ["full_market", "All market orders", "var(--s2)"], ["striker_smart", "Striker only", "var(--s3)"]];
   const W = 960, H = 350, m = { l: 62, r: 132, t: 14, b: 56 };
   const n = s0.dates.length, all = series.flatMap(([k]) => s0.nav[k]);
   const step0 = (Math.max(...all) - Math.min(...all)) / 5, mag = Math.pow(10, Math.floor(Math.log10(step0)));

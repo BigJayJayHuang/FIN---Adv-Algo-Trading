@@ -229,37 +229,169 @@ def test_resolver_matches_spec_wording():
     assert resolve_expiry("5DTE", date(2026, 11, 17), exps) is None
 
 
-def test_every_structure_builds_legal_orders():
-    for (mode, structure, direction), legs in book.STRUCTURES.items():
-        strikes = {"long": f"pct:{2 * direction}", "short": f"pct:{8 * direction}", "wing": f"pct:{-12 * direction}"}
-        dec = {"mode": mode, "structure": structure, "direction": direction, "qty": 3, "strikes": strikes}
-        os_ = book.entry_orders("TSLA", 76792991, date(2026, 11, 17), dec)
-        assert len(os_) == len(legs) and book.check_all(os_) == []
+FD = date(2026, 11, 17)
+
+
+def prepared(spot=100.0, iv=0.5):
+    from signals import prepare_chain
+    return prepare_chain(flat_chain(spot=spot, iv=iv), spot, ASOF, Config())
+
+
+STRUCTS = [("STRIKER", "long_option", 1), ("STRIKER", "long_option", -1), ("STRIKER", "debit_spread", 1),
+           ("STRIKER", "debit_spread", -1), ("SLEEPER", "bull_put_spread", 1), ("SLEEPER", "bear_call_spread", -1)]
+
+
+def dec_for(mode, structure, d, qty=3, points=4):
+    return {"mode": mode, "structure": structure, "direction": d, "qty": qty, "points": points,
+            "strikes": {"long": f"pct:{2 * d}", "short": f"pct:{8 * d}" if mode == "STRIKER" else f"pct:{-6 * d}",
+                        "wing": f"pct:{-12 * d}"}}
+
+
+@pytest.mark.parametrize("pricing", ["smart", "market"])
+def test_every_structure_builds_legal_concrete_orders(pricing):
+    pc = prepared()
+    for mode, structure, d in STRUCTS:
+        orders, rows = book.plan_entry("TSLA", 76792991, FD, dec_for(mode, structure, d), {"atm_iv": 0.5, "ret1": -0.01},
+                                       pc, 100.0, book.Pricer(pricing))
+        assert orders and book.check_all(orders) == []
+        for o in orders:          # exact contracts: Sanji needs no chain snapshot for these
+            assert isinstance(o["strike"], float) and o["expiry"] == "2026-11-27"
+            assert o["order_type"] == "mkt" or isinstance(o["lmt_prc"], float)
+        assert book.naked_risk(orders, []) == []                        # a short never goes out alone
+        if mode == "SLEEPER":
+            wing = next(o for o in orders if "-wing-" in o["id"])
+            short = next(o for o in orders if o["action"] == "SHT")
+            assert wing["order_type"] == "mkt"
+            assert (wing["strike"] < short["strike"] < 100) if d > 0 else (100 < short["strike"] < wing["strike"])
+            assert short["order_type"] == "mkt"                       # default: Sleeper trades at market (see backtest)
+        if structure == "debit_spread":
+            # smart: only the long goes out; the short is legged in once the long is owned
+            assert len(orders) == (1 if pricing == "smart" else 2)
+            assert rows[-1]["plan"].get("short_pct") == (8 * d if pricing == "smart" else None)
+
+
+def test_sleeper_limit_style_still_never_naked():
+    from pricing import PricingConfig
+    pc = prepared()
+    orders, _ = book.plan_entry("TSLA", 1, FD, dec_for("SLEEPER", "bull_put_spread", 1), {"atm_iv": 0.5}, pc, 100.0,
+                                book.Pricer("smart", PricingConfig(sleeper_style="limit")))
+    short = next(o for o in orders if o["action"] == "SHT")
+    assert short["order_type"] == "lmt" and book.naked_risk(orders, []) == []
+
+
+def test_striker_styles():
+    from pricing import PricingConfig
+    pc = prepared()
+    feat = {"atm_iv": 0.5, "ret1": -0.02}
+    get = lambda style: book.plan_entry("TSLA", 1, FD, dec_for("STRIKER", "long_option", 1), feat, pc, 100.0,
+                                        book.Pricer("smart", PricingConfig(striker_style=style)))[0]
+    assert get("market")[0]["order_type"] == "mkt"
+    dip, prot = get("dip")[0], get("protected")[0]
+    assert dip["lmt_prc"] < prot["lmt_prc"]                           # dip bids low, protected pays up
+    split = get("split")
+    assert [o["qty"] for o in split] == [2, 1] and split[0]["lmt_prc"] > split[1]["lmt_prc"]
+
+
+def test_naked_short_is_caught():
+    o = book.make_order("x", FD, "SHT", 1, 1, "put", "2026-11-27", 95.0, 1.2)
+    assert book.naked_risk([o], []) == ["x"]
+    wing_lmt = book.make_order("w", FD, "BUY", 1, 1, "put", "2026-11-27", 90.0, 0.4)
+    assert book.naked_risk([o, wing_lmt], []) == ["x"]                # a limit wing might not fill
+    held = [{"conid": 1, "contract": "put", "expiry": "2026-11-27", "qty": 1}]
+    assert book.naked_risk([o], held) == []
+
+
+# ---------------------------------------------------------------- pricing
+def row_at(pc, contract, strike, expiry=date(2026, 11, 27)):
+    from pricing import find_row
+    return find_row(pc, contract, expiry.isoformat(), strike)
+
+
+def test_sanji_fill_rule():
+    from pricing import sanji_fill
+    o, h, l = np.array([2.0, 2.0, 2.0]), np.array([2.5, 2.5, 2.1]), np.array([1.5, 1.9, 1.95])
+    f, px = sanji_fill("buy", 1.9, o, h, l)
+    assert f.tolist() == [True, True, False] and px[0] == 1.9
+    f, px = sanji_fill("buy", 2.2, o, h, l)
+    assert f.all() and (px == 2.0).all()                                # open already through: fill at open
+    f, px = sanji_fill("sell", 2.4, o, h, l)
+    assert f.tolist() == [True, True, False]
+
+
+def test_limit_price_behaves():
+    from pricing import price_limit, round_to_tick
+    pc = prepared()
+    r = row_at(pc, "call", 102.5)
+    sd = 0.5 / np.sqrt(252)
+    lo = price_limit("buy", r, 100, FD, sd, None, 0.5)
+    hi = price_limit("buy", r, 100, FD, sd, None, 0.9)
+    assert lo["limit"] < hi["limit"] <= r["ask"]                      # more urgency -> pay more, never above ask
+    falling = price_limit("buy", r, 100, FD, sd, -0.04, 0.6)
+    rising = price_limit("buy", r, 100, FD, sd, +0.04, 0.6)
+    assert falling["limit"] < rising["limit"]                         # sliding into the open -> bid lower
+    assert abs(falling["fill_prob"] - 0.6) < 0.08
+    s = price_limit("sell", r, 100, FD, sd, None, 0.5)
+    assert s["limit"] >= r["bid"] and s["edge_vs_mid"] > 0
+    assert round_to_tick(2.987, "buy") == 2.98 and round_to_tick(3.02, "buy") == 3.0 and round_to_tick(3.02, "sell") == 3.05
+
+
+# ---------------------------------------------------------------- managing the book
+def book_night(decision=None, spot=100.0):
+    return {"TSLA": {"decision": decision or {}, "feat": {"atm_iv": 0.5, "ret1": 0.0}, "pc": prepared(spot), "spot": spot}}
 
 
 def test_exit_rules():
-    fd = date(2026, 11, 17)
-    long_call = [{"ticker": "TSLA", "conid": 1, "contract": "call", "expiry": "2026-11-27", "strike": 410.0,
-                  "qty": 2, "avg_price": 5.0, "mark": 11.0}]
-    o, n = book.exit_orders(long_call, {}, {"TSLA": 400}, fd)
-    assert o and o[0]["action"] == "SEL" and "take profit" in n[0] and book.check_all(o) == []
-    o, _ = book.exit_orders([dict(long_call[0], mark=4.0)], {}, {"TSLA": 400}, fd)
+    P = book.Pricer("smart")
+    long_call = [{"ticker": "TSLA", "conid": 1, "contract": "call", "expiry": "2026-11-27", "strike": 102.5,
+                  "qty": 2, "avg_price": 1.0, "mark": 2.5}]
+    o, n, _ = book.manage(long_call, [], book_night(), FD, P)
+    assert o and o[0]["action"] == "SEL" and o[0]["order_type"] == "lmt" and "take profit" in n[0]
+    o, _, _ = book.manage([dict(long_call[0], avg_price=2.5, mark=2.4)], [], book_night(), FD, P)
     assert o == []                                                     # nothing fires
-    o, n = book.exit_orders([dict(long_call[0], mark=4.0)], {"TSLA": {"mode": "STRIKER", "direction": -1}}, {}, fd)
-    assert o and "against" in n[0]
-    o, n = book.exit_orders([dict(long_call[0], expiry="2026-11-18", mark=4.0)], {}, {}, fd)
-    assert o and "expiry" in n[0]
+    o, n, _ = book.manage([dict(long_call[0], avg_price=2.5, mark=2.4)], [],
+                          book_night({"mode": "STRIKER", "direction": -1}), FD, P)
+    assert o and "against" in n[0] and o[0]["order_type"] == "mkt"    # urgent -> market
+    o, n, _ = book.manage([dict(long_call[0], expiry="2026-11-18", avg_price=2.5, mark=2.4)], [], book_night(), FD, P)
+    assert o and "expiry" in n[0] and o[0]["order_type"] == "mkt"
 
     put_spread = [
-        {"ticker": "TSLA", "conid": 1, "contract": "put", "expiry": "2026-11-27", "strike": 380.0, "qty": -1,
-         "avg_price": 4.0, "mark": 1.5},
-        {"ticker": "TSLA", "conid": 1, "contract": "put", "expiry": "2026-11-27", "strike": 360.0, "qty": 1,
-         "avg_price": 1.0, "mark": 0.3}]
-    o, n = book.exit_orders(put_spread, {}, {"TSLA": 400}, fd)        # credit 3.00, now 1.20 -> kept 60%
-    assert {x["action"] for x in o} == {"BTC", "SEL"} and "credit" in n[0]
-    hold = [dict(put_spread[0], mark=3.5), dict(put_spread[1], mark=1.0)]
-    o, n = book.exit_orders(hold, {}, {"TSLA": 379}, fd)               # spot under the short strike
-    assert o and "breached" in n[0]
+        {"ticker": "TSLA", "conid": 1, "contract": "put", "expiry": "2026-11-27", "strike": 95.0, "qty": -1,
+         "avg_price": 2.0, "mark": 0.6},
+        {"ticker": "TSLA", "conid": 1, "contract": "put", "expiry": "2026-11-27", "strike": 90.0, "qty": 1,
+         "avg_price": 0.8, "mark": 0.2}]
+    o, n, _ = book.manage(put_spread, [], book_night(), FD, P)             # credit 1.20, now 0.40 -> kept 67%
+    assert [x["action"] for x in o] == ["BTC"] and "credit" in n[0]   # cover the short first, alone
+    hold = [dict(put_spread[0], mark=2.5), dict(put_spread[1], mark=1.0)]
+    o, n, _ = book.manage(hold, [], book_night(spot=94.0), FD, P)          # spot under the short strike
+    assert {x["action"] for x in o} == {"BTC", "SEL"} and "breached" in n[0] and all(x["order_type"] == "mkt" for x in o)
+    for orders in (o,):
+        assert book.check_all(orders) == []
+
+
+def test_leg_in_short_after_long_fills():
+    P = book.Pricer("smart")
+    ledger = [{"id": "tsla-striker-long-2026-11-16", "ticker": "TSLA", "conid": 1, "for": "2026-11-16", "mode": "STRIKER",
+               "structure": "debit_spread", "role": "long", "contract": "call", "expiry": "2026-11-27",
+               "strike": 102.5, "qty": 2, "plan": {"short_pct": 8}}]
+    held = [{"ticker": "TSLA", "conid": 1, "contract": "call", "expiry": "2026-11-27", "strike": 102.5,
+             "qty": 2, "avg_price": 1.4, "mark": 1.5}]
+    o, n, rows = book.manage(held, ledger, book_night(), FD, P)
+    assert len(o) == 1 and o[0]["action"] == "SHT" and o[0]["strike"] > 102.5 and o[0]["qty"] == 2
+    assert o[0]["expiry"] == "2026-11-27" and "-legin-" in o[0]["id"] and rows[0]["role"] == "short"
+    assert book.naked_risk(o, held) == []                              # covered by the long we own
+
+
+def test_orphan_wing_retries_or_sells():
+    P = book.Pricer("smart")
+    ledger = [{"id": "w", "ticker": "TSLA", "conid": 1, "for": "2026-11-16", "mode": "SLEEPER", "structure": "bull_put_spread",
+               "role": "wing", "contract": "put", "expiry": "2026-11-27", "strike": 87.5, "qty": 1, "plan": {}}]
+    wing = [{"ticker": "TSLA", "conid": 1, "contract": "put", "expiry": "2026-11-27", "strike": 87.5, "qty": 1,
+             "avg_price": 0.5, "mark": None}]
+    again = {"mode": "SLEEPER", "structure": "bull_put_spread", "direction": 1, "strikes": {"short": "pct:-6", "wing": "pct:-12"}}
+    o, n, _ = book.manage([dict(wing[0])], ledger, book_night(again), FD, P)
+    assert o[0]["action"] == "SHT" and 87.5 < o[0]["strike"] < 100 and "re-trying" in n[0]
+    o, n, _ = book.manage([dict(wing[0])], ledger, book_night({"mode": "IDLE"}), FD, P)
+    assert o[0]["action"] == "SEL" and "wing without" in n[0]
 
 
 def test_parse_positions_variants():
@@ -299,4 +431,5 @@ def test_nightly_job_end_to_end(tmp_path):
     assert modes["TSLA"] == "STRIKER"                                  # planted bullish sweep
     assert modes["NVDA"] != "STRIKER"                                  # planted straddle noise
     assert any(o["underlying"] == 76792991 and o["action"] == "BUY" and o["contract"] == "call" for o in orders)
+    assert all(isinstance(o["strike"], float) and len(o["expiry"]) == 10 for o in orders)   # exact contracts
     assert (root / "final" / "data" / "latest.json").exists()
