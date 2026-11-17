@@ -1,0 +1,7 @@
+{
+  "universe": [
+    {"symbol": "TSLA", "conid": 76792991, "lseg_ric": "TSLA.O"},
+    {"symbol": "NVDA", "conid": 4815747, "lseg_ric": "NVDA.O"},
+    {"symbol": "MSFT", "conid": 272093, "lseg_ric": "MSFT.O"}
+  ]
+}

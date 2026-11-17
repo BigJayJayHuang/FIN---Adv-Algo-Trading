@@ -277,5 +277,15 @@
         "volume": 10749833.0
       }
     }
+  },
+  "76792991": {
+    "tracked": true,
+    "name": "TESLA INC",
+    "price_history": {}
+  },
+  "4815747": {
+    "tracked": true,
+    "name": "NVIDIA CORPORATION",
+    "price_history": {}
   }
 }

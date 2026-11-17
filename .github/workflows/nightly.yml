@@ -1,0 +1,61 @@
+name: Nightly open orders
+
+# Modeled on the course's "Nightly OI refresh" (oi-plots.yml).
+# Runs the Sleeper/Striker algo and commits open_orders.json for Sanji.
+
+on:
+  workflow_dispatch:
+  schedule:
+    # 03:00 UTC = 10pm EST / 11pm EDT, Monday-Friday nights (UTC Tue-Sat).
+    # Friday night's run writes Monday's orders.
+    - cron: "0 3 * * 2-6"
+
+concurrency:
+  group: nightly-orders
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+  pages: write
+
+jobs:
+  orders:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r final/requirements.txt
+
+      - name: Test the algo before trusting it
+        run: python -m pytest final/tests -q
+
+      - name: Run the algo
+        env:
+          # Optional. If these secrets exist the job also pulls closes from LSEG;
+          # if not, it uses price_history.json + yfinance.
+          LSEG_APP_KEY: ${{ secrets.LSEG_APP_KEY }}
+          LSEG_USERNAME: ${{ secrets.LSEG_USERNAME }}
+          LSEG_PASSWORD: ${{ secrets.LSEG_PASSWORD }}
+        run: python final/algo.py
+
+      - name: Commit and push open orders
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "Update open orders"
+          file_pattern: |
+            open_orders.json
+            final/data/*.json
+
+      - name: Rebuild the Pages site
+        # Pushes made with GITHUB_TOKEN may not start a Pages build on their own.
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api -X POST "repos/${{ github.repository }}/pages/builds" || true

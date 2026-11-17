@@ -1,0 +1,7 @@
+numpy
+pandas
+scipy
+requests
+yfinance
+lseg-data
+pytest
