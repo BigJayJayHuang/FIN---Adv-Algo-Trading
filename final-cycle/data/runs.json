@@ -1,0 +1,33 @@
+[
+ {
+  "generated_at": "2026-11-21T00:16:17Z",
+  "for": "2026-11-23",
+  "n_orders": 2,
+  "tickers": {
+   "TSLA": {
+    "mode": "IDLE",
+    "dir": 0,
+    "points": 3,
+    "flow": -0.0747,
+    "irregular": 0.3673,
+    "atm_iv": 0.6892
+   },
+   "NVDA": {
+    "mode": "IDLE",
+    "dir": 0,
+    "points": 3,
+    "flow": -0.0221,
+    "irregular": 0.6583,
+    "atm_iv": 1.1036
+   },
+   "MSFT": {
+    "mode": "SLEEPER",
+    "dir": -1,
+    "points": 0,
+    "flow": 0.0909,
+    "irregular": 0.1422,
+    "atm_iv": 0.5097
+   }
+  }
+ }
+]

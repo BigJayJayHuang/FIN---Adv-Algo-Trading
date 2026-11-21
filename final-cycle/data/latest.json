@@ -1,0 +1,731 @@
+{
+  "generated_at": "2026-11-21T00:16:17Z",
+  "for": "2026-11-23",
+  "asof": "2026-11-20",
+  "demo": false,
+  "lseg_enabled": false,
+  "positions_file": false,
+  "positions": [],
+  "exit_notes": [],
+  "orders": [
+    {
+      "id": "msft-sleeper-wing-2026-11-23",
+      "for": "2026-11-23",
+      "order_type": "mkt",
+      "action": "BUY",
+      "qty": 2,
+      "underlying": 272093,
+      "contract": "call",
+      "expiry": "2026-11-30",
+      "strike": 547.5,
+      "ref": "open"
+    },
+    {
+      "id": "msft-sleeper-short-2026-11-23",
+      "for": "2026-11-23",
+      "order_type": "mkt",
+      "action": "SHT",
+      "qty": 2,
+      "underlying": 272093,
+      "contract": "call",
+      "expiry": "2026-11-30",
+      "strike": 517.5,
+      "ref": "open"
+    }
+  ],
+  "pricing_mode": "smart",
+  "pricing": {},
+  "tickers": [
+    {
+      "symbol": "TSLA",
+      "conid": 76792991,
+      "tracked": true,
+      "server_bars": 0,
+      "tradeable": false,
+      "error": null,
+      "data_source": "yfinance",
+      "close_sources": [
+        "yfinance"
+      ],
+      "extra": {},
+      "feat": {
+        "asof": "2026-11-20",
+        "spot": 345.82,
+        "rv20": 0.6543,
+        "sma20": 384.7985,
+        "ret5": -0.1138,
+        "ret1": -0.0764,
+        "n_closes": 128.0,
+        "n_contracts": 798,
+        "ok": true,
+        "total_premium": 395547646.0,
+        "n_unusual": 121,
+        "unusual_premium": 145279588.0,
+        "unusual_share": 0.3673,
+        "n_straddle_legs": 46,
+        "flow_score": -0.0747,
+        "flow_score_all": -0.2047,
+        "put_call_vol": 0.6595,
+        "flow_delta_usd": -7385760.0,
+        "flow_vega_usd": -168034.0,
+        "top_unusual": [
+          {
+            "expiry": "2026-11-23",
+            "type": "P",
+            "strike": 360.0,
+            "volume": 5723,
+            "oi": 1247,
+            "vol_oi": 4.6,
+            "premium": 9228338.0,
+            "iv": 0.5339,
+            "delta": -0.788,
+            "aggressor": 1.0
+          },
+          {
+            "expiry": "2026-11-23",
+            "type": "P",
+            "strike": 365.0,
+            "volume": 3684,
+            "oi": 657,
+            "vol_oi": 5.6,
+            "premium": 7607460.0,
+            "iv": 0.5789,
+            "delta": -0.84,
+            "aggressor": 0.26
+          },
+          {
+            "expiry": "2026-11-23",
+            "type": "P",
+            "strike": 370.0,
+            "volume": 3048,
+            "oi": 553,
+            "vol_oi": 5.5,
+            "premium": 7566660.0,
+            "iv": 0.5352,
+            "delta": -0.913,
+            "aggressor": 0.75
+          },
+          {
+            "expiry": "2026-11-23",
+            "type": "P",
+            "strike": 350.0,
+            "volume": 6501,
+            "oi": 926,
+            "vol_oi": 7.0,
+            "premium": 6871557.0,
+            "iv": 0.5941,
+            "delta": -0.575,
+            "aggressor": 0.0
+          },
+          {
+            "expiry": "2026-12-18",
+            "type": "C",
+            "strike": 355.0,
+            "volume": 2766,
+            "oi": 997,
+            "vol_oi": 2.8,
+            "premium": 5573490.0,
+            "iv": 0.6327,
+            "delta": 0.482,
+            "aggressor": -1.0
+          },
+          {
+            "expiry": "2026-11-23",
+            "type": "P",
+            "strike": 355.0,
+            "volume": 4108,
+            "oi": 1131,
+            "vol_oi": 3.6,
+            "premium": 5330130.0,
+            "iv": 0.5927,
+            "delta": -0.675,
+            "aggressor": 0.65
+          },
+          {
+            "expiry": "2026-11-23",
+            "type": "P",
+            "strike": 362.5,
+            "volume": 2631,
+            "oi": 383,
+            "vol_oi": 6.9,
+            "premium": 4623982.0,
+            "iv": 0.5107,
+            "delta": -0.838,
+            "aggressor": 1.0
+          },
+          {
+            "expiry": "2026-11-27",
+            "type": "P",
+            "strike": 340.0,
+            "volume": 3867,
+            "oi": 1959,
+            "vol_oi": 2.0,
+            "premium": 4369710.0,
+            "iv": 0.6826,
+            "delta": -0.407,
+            "aggressor": 0.0
+          }
+        ],
+        "atm_expiry": "2026-11-27",
+        "atm_iv": 0.6892,
+        "skew25": 0.1412,
+        "vrp": 0.0349,
+        "iv_over_rv": 1.0533,
+        "iv_change_1d": null,
+        "iv_rank": null,
+        "iv_history_n": 0,
+        "gex_usd": -105910655.0,
+        "gex_norm": -0.272,
+        "gamma_flip": 372.79,
+        "call_wall": 400.0,
+        "put_wall": 300.0,
+        "days_to_earnings": 68
+      },
+      "decision": {
+        "mode": "IDLE",
+        "direction": 0,
+        "points": 3,
+        "qty": 0,
+        "structure": null,
+        "striker_checks": [
+          {
+            "name": "Irregular flow",
+            "passed": true,
+            "value": "37% of premium, 121 contracts",
+            "need": ">= 20% and >= 3"
+          },
+          {
+            "name": "Flow is one-sided",
+            "passed": false,
+            "value": "-0.07",
+            "need": "|score| >= 0.35"
+          },
+          {
+            "name": "IV popped",
+            "passed": false,
+            "value": "n/a (no history yet)",
+            "need": ">= +8% vs last night"
+          },
+          {
+            "name": "Dealers short gamma",
+            "passed": true,
+            "value": "-0.27",
+            "need": "< 0"
+          },
+          {
+            "name": "Price agrees with flow",
+            "passed": true,
+            "value": "-11.4% (5d)",
+            "need": "same sign as flow"
+          }
+        ],
+        "sleeper_checks": [
+          {
+            "name": "Quiet tape",
+            "passed": false,
+            "value": "37% irregular",
+            "need": "< 20%"
+          },
+          {
+            "name": "Flow not leaning against the spread",
+            "passed": true,
+            "value": "-0.07",
+            "need": "not >= +0.35"
+          },
+          {
+            "name": "IV rich vs realized",
+            "passed": true,
+            "value": "+3.5% pts",
+            "need": ">= +3% pts"
+          },
+          {
+            "name": "Dealers not short gamma",
+            "passed": false,
+            "value": "-0.27",
+            "need": ">= -0.15"
+          },
+          {
+            "name": "No earnings soon",
+            "passed": true,
+            "value": "68 days",
+            "need": "> 10 days"
+          }
+        ],
+        "reason": "Heavy irregular flow but no clear direction / not enough confirmation: stand aside"
+      },
+      "orders": []
+    },
+    {
+      "symbol": "NVDA",
+      "conid": 4815747,
+      "tracked": true,
+      "server_bars": 0,
+      "tradeable": false,
+      "error": null,
+      "data_source": "yfinance",
+      "close_sources": [
+        "yfinance"
+      ],
+      "extra": {},
+      "feat": {
+        "asof": "2026-11-20",
+        "spot": 125.53,
+        "rv20": 0.6904,
+        "sma20": 181.457,
+        "ret5": -0.2292,
+        "ret1": -0.1401,
+        "n_closes": 128.0,
+        "n_contracts": 657,
+        "ok": true,
+        "total_premium": 1443298461.0,
+        "n_unusual": 354,
+        "unusual_premium": 950133308.0,
+        "unusual_share": 0.6583,
+        "n_straddle_legs": 234,
+        "flow_score": -0.0221,
+        "flow_score_all": -0.0836,
+        "put_call_vol": 1.1342,
+        "flow_delta_usd": -1936489.0,
+        "flow_vega_usd": 313823.0,
+        "top_unusual": [
+          {
+            "expiry": "2026-12-18",
+            "type": "P",
+            "strike": 135.0,
+            "volume": 31101,
+            "oi": 19424,
+            "vol_oi": 1.6,
+            "premium": 49528343.0,
+            "iv": 0.7324,
+            "delta": -0.596,
+            "aggressor": -1.0
+          },
+          {
+            "expiry": "2026-11-23",
+            "type": "P",
+            "strike": 135.0,
+            "volume": 44832,
+            "oi": 5259,
+            "vol_oi": 8.5,
+            "premium": 47163264.0,
+            "iv": 0.8584,
+            "delta": -0.814,
+            "aggressor": 0.0
+          },
+          {
+            "expiry": "2026-11-23",
+            "type": "P",
+            "strike": 140.0,
+            "volume": 21571,
+            "oi": 7265,
+            "vol_oi": 3.0,
+            "premium": 32086862.0,
+            "iv": 0.874,
+            "delta": -0.909,
+            "aggressor": -0.71
+          },
+          {
+            "expiry": "2026-11-27",
+            "type": "P",
+            "strike": 140.0,
+            "volume": 17910,
+            "oi": 11556,
+            "vol_oi": 1.5,
+            "premium": 28879875.0,
+            "iv": 0.8843,
+            "delta": -0.795,
+            "aggressor": -1.0
+          },
+          {
+            "expiry": "2026-11-27",
+            "type": "P",
+            "strike": 135.0,
+            "volume": 21964,
+            "oi": 6274,
+            "vol_oi": 3.5,
+            "premium": 28443380.0,
+            "iv": 0.9119,
+            "delta": -0.694,
+            "aggressor": 0.0
+          },
+          {
+            "expiry": "2026-11-23",
+            "type": "P",
+            "strike": 130.0,
+            "volume": 35479,
+            "oi": 3850,
+            "vol_oi": 9.2,
+            "premium": 25988368.0,
+            "iv": 1.0305,
+            "delta": -0.627,
+            "aggressor": -1.0
+          },
+          {
+            "expiry": "2026-12-04",
+            "type": "P",
+            "strike": 135.0,
+            "volume": 17056,
+            "oi": 8915,
+            "vol_oi": 1.9,
+            "premium": 23707840.0,
+            "iv": 0.8188,
+            "delta": -0.642,
+            "aggressor": 1.0
+          },
+          {
+            "expiry": "2026-11-27",
+            "type": "P",
+            "strike": 125.0,
+            "volume": 32326,
+            "oi": 6450,
+            "vol_oi": 5.0,
+            "premium": 23597980.0,
+            "iv": 1.0938,
+            "delta": -0.457,
+            "aggressor": 1.0
+          }
+        ],
+        "atm_expiry": "2026-11-27",
+        "atm_iv": 1.1036,
+        "skew25": 0.2539,
+        "vrp": 0.4132,
+        "iv_over_rv": 1.5986,
+        "iv_change_1d": null,
+        "iv_rank": null,
+        "iv_history_n": 0,
+        "gex_usd": -98828048.0,
+        "gex_norm": -0.4873,
+        "gamma_flip": null,
+        "call_wall": 155.0,
+        "put_wall": 120.0,
+        "days_to_earnings": null
+      },
+      "decision": {
+        "mode": "IDLE",
+        "direction": 0,
+        "points": 3,
+        "qty": 0,
+        "structure": null,
+        "striker_checks": [
+          {
+            "name": "Irregular flow",
+            "passed": true,
+            "value": "66% of premium, 354 contracts",
+            "need": ">= 20% and >= 3"
+          },
+          {
+            "name": "Flow is one-sided",
+            "passed": false,
+            "value": "-0.02",
+            "need": "|score| >= 0.35"
+          },
+          {
+            "name": "IV popped",
+            "passed": false,
+            "value": "n/a (no history yet)",
+            "need": ">= +8% vs last night"
+          },
+          {
+            "name": "Dealers short gamma",
+            "passed": true,
+            "value": "-0.49",
+            "need": "< 0"
+          },
+          {
+            "name": "Price agrees with flow",
+            "passed": true,
+            "value": "-22.9% (5d)",
+            "need": "same sign as flow"
+          }
+        ],
+        "sleeper_checks": [
+          {
+            "name": "Quiet tape",
+            "passed": false,
+            "value": "66% irregular",
+            "need": "< 20%"
+          },
+          {
+            "name": "Flow not leaning against the spread",
+            "passed": true,
+            "value": "-0.02",
+            "need": "not >= +0.35"
+          },
+          {
+            "name": "IV rich vs realized",
+            "passed": true,
+            "value": "+41.3% pts",
+            "need": ">= +3% pts"
+          },
+          {
+            "name": "Dealers not short gamma",
+            "passed": false,
+            "value": "-0.49",
+            "need": ">= -0.15"
+          },
+          {
+            "name": "No earnings soon",
+            "passed": true,
+            "value": "unknown",
+            "need": "> 10 days"
+          }
+        ],
+        "reason": "Heavy irregular flow but no clear direction / not enough confirmation: stand aside"
+      },
+      "orders": []
+    },
+    {
+      "symbol": "MSFT",
+      "conid": 272093,
+      "tracked": true,
+      "server_bars": 44,
+      "tradeable": true,
+      "error": null,
+      "data_source": "yfinance",
+      "close_sources": [
+        "price_history.json"
+      ],
+      "extra": {},
+      "feat": {
+        "asof": "2026-11-20",
+        "spot": 484.52,
+        "rv20": 0.3812,
+        "sma20": 522.9565,
+        "ret5": -0.0751,
+        "ret1": -0.0277,
+        "n_closes": 44.0,
+        "n_contracts": 884,
+        "ok": true,
+        "total_premium": 171605150.0,
+        "n_unusual": 59,
+        "unusual_premium": 24397094.0,
+        "unusual_share": 0.1422,
+        "n_straddle_legs": 10,
+        "flow_score": 0.0909,
+        "flow_score_all": -0.139,
+        "put_call_vol": 1.1516,
+        "flow_delta_usd": -1411159.0,
+        "flow_vega_usd": -92001.0,
+        "top_unusual": [
+          {
+            "expiry": "2026-11-27",
+            "type": "P",
+            "strike": 570.0,
+            "volume": 272,
+            "oi": 1,
+            "vol_oi": 272.0,
+            "premium": 2307240.0,
+            "iv": 0.6907,
+            "delta": -0.95,
+            "aggressor": -1.0
+          },
+          {
+            "expiry": "2026-11-27",
+            "type": "C",
+            "strike": 495.0,
+            "volume": 2031,
+            "oi": 756,
+            "vol_oi": 2.7,
+            "premium": 1513095.0,
+            "iv": 0.4639,
+            "delta": 0.386,
+            "aggressor": 0.55
+          },
+          {
+            "expiry": "2026-11-25",
+            "type": "P",
+            "strike": 457.5,
+            "volume": 3474,
+            "oi": 0,
+            "vol_oi": 3474.0,
+            "premium": 1467765.0,
+            "iv": 0.6233,
+            "delta": -0.203,
+            "aggressor": -0.53
+          },
+          {
+            "expiry": "2026-11-23",
+            "type": "P",
+            "strike": 490.0,
+            "volume": 1126,
+            "oi": 225,
+            "vol_oi": 5.0,
+            "premium": 1224525.0,
+            "iv": 0.5164,
+            "delta": -0.583,
+            "aggressor": 0.36
+          },
+          {
+            "expiry": "2026-11-23",
+            "type": "P",
+            "strike": 505.0,
+            "volume": 509,
+            "oi": 267,
+            "vol_oi": 1.9,
+            "premium": 1087988.0,
+            "iv": 0.4934,
+            "delta": -0.815,
+            "aggressor": 1.0
+          },
+          {
+            "expiry": "2026-11-23",
+            "type": "P",
+            "strike": 497.5,
+            "volume": 569,
+            "oi": 226,
+            "vol_oi": 2.5,
+            "premium": 869147.0,
+            "iv": 0.4534,
+            "delta": -0.731,
+            "aggressor": 0.89
+          },
+          {
+            "expiry": "2026-11-23",
+            "type": "P",
+            "strike": 485.0,
+            "volume": 1015,
+            "oi": 138,
+            "vol_oi": 7.4,
+            "premium": 847525.0,
+            "iv": 0.5223,
+            "delta": -0.496,
+            "aggressor": 0.26
+          },
+          {
+            "expiry": "2026-11-23",
+            "type": "P",
+            "strike": 487.5,
+            "volume": 860,
+            "oi": 422,
+            "vol_oi": 2.0,
+            "premium": 825600.0,
+            "iv": 0.5254,
+            "delta": -0.539,
+            "aggressor": 1.0
+          }
+        ],
+        "atm_expiry": "2026-11-27",
+        "atm_iv": 0.5097,
+        "skew25": 0.1092,
+        "vrp": 0.1285,
+        "iv_over_rv": 1.3372,
+        "iv_change_1d": null,
+        "iv_rank": null,
+        "iv_history_n": 0,
+        "gex_usd": 69061019.0,
+        "gex_norm": 0.0892,
+        "gamma_flip": 474.62,
+        "call_wall": 575.0,
+        "put_wall": 475.0,
+        "days_to_earnings": 68
+      },
+      "decision": {
+        "mode": "SLEEPER",
+        "direction": -1,
+        "points": 0,
+        "qty": 2,
+        "structure": "bear_call_spread",
+        "striker_checks": [
+          {
+            "name": "Irregular flow",
+            "passed": false,
+            "value": "14% of premium, 59 contracts",
+            "need": ">= 20% and >= 3"
+          },
+          {
+            "name": "Flow is one-sided",
+            "passed": false,
+            "value": "+0.09",
+            "need": "|score| >= 0.35"
+          },
+          {
+            "name": "IV popped",
+            "passed": false,
+            "value": "n/a (no history yet)",
+            "need": ">= +8% vs last night"
+          },
+          {
+            "name": "Dealers short gamma",
+            "passed": false,
+            "value": "+0.09",
+            "need": "< 0"
+          },
+          {
+            "name": "Price agrees with flow",
+            "passed": false,
+            "value": "-7.5% (5d)",
+            "need": "same sign as flow"
+          }
+        ],
+        "sleeper_checks": [
+          {
+            "name": "Quiet tape",
+            "passed": true,
+            "value": "14% irregular",
+            "need": "< 20%"
+          },
+          {
+            "name": "Flow not leaning against the spread",
+            "passed": true,
+            "value": "+0.09",
+            "need": "not >= +0.35"
+          },
+          {
+            "name": "IV rich vs realized",
+            "passed": true,
+            "value": "+12.8% pts",
+            "need": ">= +3% pts"
+          },
+          {
+            "name": "Dealers not short gamma",
+            "passed": true,
+            "value": "+0.09",
+            "need": ">= -0.15"
+          },
+          {
+            "name": "No earnings soon",
+            "passed": true,
+            "value": "68 days",
+            "need": "> 10 days"
+          }
+        ],
+        "reason": "Quiet tape and rich IV: sell a call spread over the market (trend down)",
+        "strikes": {
+          "short": "pct:7",
+          "wing": "pct:13"
+        },
+        "expected_move": 0.0706
+      },
+      "orders": [
+        "msft-sleeper-wing-2026-11-23",
+        "msft-sleeper-short-2026-11-23"
+      ]
+    }
+  ],
+  "warnings": [],
+  "config": {
+    "min_dte": 1,
+    "max_dte": 30,
+    "moneyness_band": 0.25,
+    "target_dte": 7,
+    "uoa_min_volume": 250,
+    "uoa_vol_oi": 1.5,
+    "uoa_min_premium": 50000.0,
+    "uoa_share": 0.2,
+    "uoa_min_count": 3,
+    "flow_min": 0.35,
+    "iv_pop": 0.08,
+    "striker_min_points": 3,
+    "rich_iv_rank": 80.0,
+    "rich_iv_over_rv": 1.6,
+    "sleeper_enabled": true,
+    "vrp_min": 0.03,
+    "vrp_big": 0.08,
+    "gex_floor": -0.15,
+    "earnings_days": 10,
+    "striker_long_em": 0.25,
+    "spread_short_em": 1.0,
+    "sleeper_short_em": 1.0,
+    "sleeper_wing_em": 1.8
+  }
+}
