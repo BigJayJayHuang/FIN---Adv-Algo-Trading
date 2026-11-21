@@ -226,6 +226,8 @@ def run(root: str, now: datetime, demo: bool = False, cfg: Config | None = None,
               "tickers": tickers, "warnings": warnings, "config": cfg.to_dict()}
 
     write_json(os.path.join(root, "open_orders.json"), orders)
+    # same file where the Sanji spec says it lives (the assignment asks for the root copy)
+    write_json(os.path.join(root, "mkt", "open_orders.json"), orders)
     write_json(os.path.join(data_dir, "latest.json"), latest)
     if not demo:
         write_json(os.path.join(data_dir, "iv_history.json"), iv_hist_all, indent=1)

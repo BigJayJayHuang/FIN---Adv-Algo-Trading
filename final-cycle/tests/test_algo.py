@@ -425,6 +425,7 @@ def test_nightly_job_end_to_end(tmp_path):
     }))
     latest = algo.run(str(root), datetime(2026, 11, 16, 22, 0, tzinfo=ZoneInfo("America/New_York")), demo=True)
     orders = json.loads((root / "open_orders.json").read_text())
+    assert json.loads((root / "mkt" / "open_orders.json").read_text()) == orders
     assert isinstance(orders, list) and book.check_all(orders) == []
     assert all(o["for"] == "2026-11-17" for o in orders)
     modes = {t["symbol"]: t["decision"]["mode"] for t in latest["tickers"]}

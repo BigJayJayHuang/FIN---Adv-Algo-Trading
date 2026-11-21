@@ -6,9 +6,10 @@ name: Nightly open orders
 on:
   workflow_dispatch:
   schedule:
-    # 03:00 UTC = 10pm EST / 11pm EDT, Monday-Friday nights (UTC Tue-Sat).
+    # 02:17 UTC = 9:17pm EST / 10:17pm EDT, Monday-Friday nights (UTC Tue-Sat).
+    # Odd minute on purpose: GitHub queues jobs scheduled on the hour and can start them hours late.
     # Friday night's run writes Monday's orders.
-    - cron: "0 3 * * 2-6"
+    - cron: "17 2 * * 2-6"
 
 concurrency:
   group: nightly-orders
@@ -49,9 +50,7 @@ jobs:
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: "Update open orders"
-          file_pattern: |
-            open_orders.json
-            final-cycle/data/*.json
+          file_pattern: "open_orders.json mkt/open_orders.json final-cycle/data/*.json"
 
       - name: Rebuild the Pages site
         # Pushes made with GITHUB_TOKEN may not start a Pages build on their own.
