@@ -397,7 +397,7 @@
   const lastN = hist.flagged.slice(-252);
   const avg = lastN.reduce((a, b) => a + b, 0) / Math.max(1, lastN.length);
   $("tiles").innerHTML = [
-    ["Footprint Index today", hist.flagged_today_full, `1-year average ${avg.toFixed(1)} a day`],
+    ["Footprint Index today", hist.flagged_today_full, `${hist.flagged.filter((x) => x > 0).length} flagged days in the past ${Math.max(1, Math.round(hist.dates.length / 252))} years (daily signals only)`],
     ["Flagged names", flaggedToday.length ? flaggedToday.slice(0, 4).map((r) => r.sym).join(", ") : "None", "score of 2 or more"],
     ["Sanji names flagged", sanji.length ? sanji.join(", ") : "None", "TSLA, NVDA, MSFT"],
     ["Data as of", T.asof, (T.demo ? "SIMULATED DATA - " : "") + "updated " + T.generated],
