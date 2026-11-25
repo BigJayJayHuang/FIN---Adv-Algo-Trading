@@ -101,7 +101,14 @@
   @media (max-width: 760px) { .two { grid-template-columns: 1fr; } }
   .note { background: var(--surface-2); border-radius: 10px; padding: 10px 14px; font-size: 13.5px; color: var(--ink-2); }
   #netFilters .range { flex-wrap: wrap; }
-  #netChart { overflow: hidden; }
+  #netChart { overflow: hidden; border-radius: 12px; user-select: none; -webkit-user-select: none; }
+  #netChart svg ellipse, #netChart svg line, #netChart svg text { pointer-events: none; }
+  .netzoom { position: absolute; bottom: 10px; right: 10px; display: flex; flex-direction: column; gap: 4px; z-index: 4; }
+  .netzoom button { width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--hair); background: var(--surface);
+    color: var(--ink); font: 600 17px/1 ui-sans-serif, system-ui; cursor: pointer; box-shadow: var(--shadow); }
+  .netzoom button:hover { border-color: var(--accent); color: var(--accent); }
+  .nethint { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); padding: 8px 14px; border-radius: 999px; z-index: 4;
+    background: rgba(0,0,0,.72); color: #fff; font-size: 13px; pointer-events: none; opacity: 0; transition: opacity .25s; }
   #netStory { margin: 4px 0 10px; font-size: 14.5px; }
   footer { padding: 30px 0 60px; color: var(--ink-3); font-size: 13px; }
   .back { position: fixed; top: 14px; right: 14px; z-index: 50; padding: 6px 12px; border-radius: 999px; font: 600 12.5px/1.2 ui-sans-serif, system-ui;
@@ -247,8 +254,7 @@
       measured against the move options priced for the day (or the usual daily move when there are no options). Each sector keeps its own spot, so the map looks the
       same every day and only the colors change. Lines join each asset to its (up to) 4 closest partners, correlated above 0.55 over the last 60
       sessions. A line stays gray unless both ends really moved today; then it turns green or red. A purple dashed line means the two went opposite
-      ways on heavy volume, a hint that money rotated from one to the other. The sentence on top is written automatically from the same data. Drag bubbles, drag the background to pan, scroll to
-      zoom, and click a bubble to pin its details.</p>
+      ways on heavy volume, a hint that money rotated from one to the other. The sentence on top is written automatically from the same data. Drag a bubble to move it, drag anywhere else to pan, pinch (or hold &#8984;/Ctrl and scroll) to zoom, double-click to zoom in, and click a bubble to pin its details.</p>
     <div id="netFilters"></div>
     <div id="netStory"></div>
     <div class="chart" id="netChart"></div>
@@ -710,12 +716,51 @@
       g.addEventListener("pointerup", () => { if (drag && !drag.moved) { NET.pinned = NET.pinned === i ? null : i; detail(NET.pinned); focus(NET.pinned); } drag = null; });
       g.addEventListener("pointerleave", () => { if (!drag) { tip.style.opacity = 0; focus(NET.pinned); } });
     });
+    // ---- pan anywhere (not just empty background), gentle zoom, buttons, page scroll stays normal ----
+    const clampView = () => {
+      const k = NET.view.k, px = W * 0.3, py = H * 0.3;
+      NET.view.x = Math.min(Math.max(W - W * k, 0) + px, Math.max(Math.min(W - W * k, 0) - px, NET.view.x));
+      NET.view.y = Math.min(Math.max(H - H * k, 0) + py, Math.max(Math.min(H - H * k, 0) - py, NET.view.y));
+    };
+    const zoomAt = (k, sx, sy, ms = 0) => {
+      k = Math.max(0.6, Math.min(4, k));
+      const from = { ...NET.view }, wx = (sx - from.x) / from.k, wy = (sy - from.y) / from.k;
+      const to = { k, x: sx - wx * k, y: sy - wy * k };
+      if (!ms) { NET.view = to; clampView(); applyView(); return; }
+      const t0 = performance.now();
+      const step = (now) => { const t = Math.min(1, (now - t0) / ms), e = 1 - Math.pow(1 - t, 3);
+        NET.view = { k: from.k + (to.k - from.k) * e, x: from.x + (to.x - from.x) * e, y: from.y + (to.y - from.y) * e };
+        clampView(); applyView(); if (t < 1) requestAnimationFrame(step); };
+      requestAnimationFrame(step);
+    };
     let pan = null;
-    bg.addEventListener("pointerdown", (ev) => { bg.setPointerCapture(ev.pointerId); const w = toWorld(ev); pan = { sx: w.sx, sy: w.sy, x: NET.view.x, y: NET.view.y, moved: false }; svg.style.cursor = "grabbing"; });
-    bg.addEventListener("pointermove", (ev) => { if (!pan) return; const w = toWorld(ev); NET.view.x = pan.x + w.sx - pan.sx; NET.view.y = pan.y + w.sy - pan.sy; pan.moved = true; applyView(); });
-    bg.addEventListener("pointerup", () => { if (pan && !pan.moved && NET.pinned != null) { NET.pinned = null; detail(null); focus(null); } pan = null; svg.style.cursor = "grab"; });
-    svg.addEventListener("wheel", (ev) => { ev.preventDefault(); const w = toWorld(ev); const k = Math.max(0.5, Math.min(3, NET.view.k * (ev.deltaY < 0 ? 1.12 : 1 / 1.12)));
-      NET.view.x = w.sx - w.x * k; NET.view.y = w.sy - w.y * k; NET.view.k = k; applyView(); }, { passive: false });
+    svg.addEventListener("pointerdown", (ev) => { svg.setPointerCapture(ev.pointerId); const w = toWorld(ev); pan = { sx: w.sx, sy: w.sy, x: NET.view.x, y: NET.view.y, moved: false }; svg.style.cursor = "grabbing"; });
+    svg.addEventListener("pointermove", (ev) => { if (!pan) return; const w = toWorld(ev);
+      if (Math.abs(w.sx - pan.sx) + Math.abs(w.sy - pan.sy) > 3) pan.moved = true;
+      NET.view.x = pan.x + w.sx - pan.sx; NET.view.y = pan.y + w.sy - pan.sy; clampView(); applyView(); });
+    svg.addEventListener("pointerup", () => { if (pan && !pan.moved && NET.pinned != null) { NET.pinned = null; detail(null); focus(null); } pan = null; svg.style.cursor = "grab"; });
+    svg.addEventListener("dblclick", (ev) => { if (ev.target.tagName === "circle") return; const w = toWorld(ev); zoomAt(NET.view.k * 1.6, w.sx, w.sy, 220); });
+    const hint = document.createElement("div"); hint.className = "nethint"; hint.textContent = "Pinch, or hold ⌘/Ctrl and scroll, to zoom"; box.appendChild(hint);
+    let hintT = null;
+    svg.addEventListener("wheel", (ev) => {
+      if (!(ev.ctrlKey || ev.metaKey)) {            // plain scroll = scroll the page
+        hint.style.opacity = 1; clearTimeout(hintT); hintT = setTimeout(() => (hint.style.opacity = 0), 1200); return;
+      }
+      ev.preventDefault(); const w = toWorld(ev);
+      const dy = ev.deltaMode === 1 ? ev.deltaY * 16 : ev.deltaY;      // lines -> pixels
+      zoomAt(NET.view.k * Math.exp(-dy * 0.0018), w.sx, w.sy);
+    }, { passive: false });
+    const ctl = document.createElement("div"); ctl.className = "netzoom";
+    ctl.innerHTML = '<button type="button" data-z="in" aria-label="Zoom in" title="Zoom in">+</button><button type="button" data-z="out" aria-label="Zoom out" title="Zoom out">−</button><button type="button" data-z="fit" aria-label="Fit the whole map" title="Fit the whole map">⤢</button>';
+    ctl.addEventListener("pointerdown", (ev) => ev.stopPropagation());
+    ctl.addEventListener("click", (ev) => { const b = ev.target.closest("button"); if (!b) return;
+      if (b.dataset.z === "fit") { const from = { ...NET.view }, t0 = performance.now();
+        const step = (now) => { const t = Math.min(1, (now - t0) / 220), e = 1 - Math.pow(1 - t, 3);
+          NET.view = { k: from.k + (1 - from.k) * e, x: from.x * (1 - e), y: from.y * (1 - e) }; applyView(); if (t < 1) requestAnimationFrame(step); };
+        requestAnimationFrame(step); return; }
+      zoomAt(NET.view.k * (b.dataset.z === "in" ? 1.35 : 1 / 1.35), W / 2, H / 2, 200); });
+    box.appendChild(ctl);
+
 
     $("netLegend").innerHTML =
       `<span><i style="background:${mix(C.flat, C.up, 1)}"></i>up</span><span><i style="background:${mix(C.flat, C.down, 1)}"></i>down (darker = bigger vs the move options priced)</span>` +
