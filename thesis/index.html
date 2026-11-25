@@ -1,0 +1,832 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Footprints Before the News - Investment Thesis</title>
+<meta name="description" content="FINTECH 535 final project, part 1: an investment thesis on spotting informed trading before the news, with a tracker that updates every weekday.">
+<style>
+  :root {
+    color-scheme: light;
+    --bg: #f3ecdf; --surface: #fbf7ee; --surface-2: #ede4d3;
+    --ink: #2b2620; --ink-2: #5a5144; --ink-3: #75695a;
+    --hair: #dfd4bf; --grid: #e7dece; --accent: #1d6f6a; --accent-2: #b85a33;
+    --s0: #d6cbb6; --s1: #e8b48f; --s2: #c8703f; --s3: #8a3a14;
+    --line: #1d6f6a; --edge: #b9ac94;
+    --good: #2f7d32; --bad: #b3261e; --wait: #8a6d1f;
+    --up: #1f8a4c; --down: #c4352b; --flat: #d9cfbd; --split: #8f8471; --rot: #6a4ce2;
+    --shadow: 0 1px 2px rgba(80,60,20,.07), 0 10px 24px -14px rgba(80,60,20,.28);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      color-scheme: dark;
+      --bg: #1f1b16; --surface: #29241d; --surface-2: #332d24;
+      --ink: #f2eadb; --ink-2: #cdc3af; --ink-3: #a29883;
+      --hair: #40382c; --grid: #3a3328; --accent: #4fb0a8; --accent-2: #e58a5e;
+      --s0: #5a5143; --s1: #9a5a37; --s2: #d07a48; --s3: #f2a77a;
+      --line: #4fb0a8; --edge: #6b6150;
+      --good: #6cc070; --bad: #ef7a70; --wait: #d8b35a;
+      --up: #3fbf6a; --down: #ef5b50; --flat: #4a4236; --split: #8f8473; --rot: #9887ef;
+      --shadow: none;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+    font: 15.5px/1.62 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; -webkit-font-smoothing: antialiased; }
+  .wrap { max-width: 1040px; margin: 0 auto; padding: 0 20px; }
+  a { color: var(--accent); }
+  header.wrap { padding-top: 52px; padding-bottom: 8px; }
+  .eyebrow { margin: 0 0 8px; color: var(--ink-3); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; }
+  .eyebrow a { color: inherit; }
+  h1 { margin: 0 0 14px; font: 600 clamp(30px, 5.5vw, 46px)/1.1 ui-serif, Georgia, "Iowan Old Style", serif; letter-spacing: -.01em; }
+  h2 { margin: 0 0 10px; font: 600 26px/1.2 ui-serif, Georgia, "Iowan Old Style", serif; }
+  h3 { margin: 22px 0 6px; font-size: 15px; letter-spacing: .02em; }
+  .thesis { margin: 0 0 18px; padding: 22px 26px; background: var(--surface); border: 1px solid var(--hair); border-left: 4px solid var(--accent);
+    border-radius: 14px; font: 500 clamp(18px, 2.4vw, 22px)/1.45 ui-serif, Georgia, serif; box-shadow: var(--shadow); }
+  .glance { margin-top: 16px; }
+  .glance td:first-child { white-space: nowrap; font-weight: 650; width: 1%; padding-right: 16px; }
+  .glance a { text-decoration: none; }
+  .sub { color: var(--ink-2); max-width: 70ch; margin: 0 0 6px; }
+  section { padding: 28px 0 8px; }
+  .card { background: var(--surface); border: 1px solid var(--hair); border-radius: 16px; padding: 22px; box-shadow: var(--shadow); }
+  .card + .card { margin-top: 18px; }
+  .num { counter-reset: none; display: inline-block; min-width: 26px; height: 26px; margin-right: 8px; border-radius: 999px; text-align: center;
+    font: 700 13px/26px ui-sans-serif, system-ui; color: var(--surface); background: var(--accent); vertical-align: 3px; }
+  p { margin: 0 0 12px; }
+  ul { margin: 0 0 12px; padding-left: 20px; }
+  li { margin: 0 0 6px; }
+  .muted { color: var(--ink-3); }
+  .small { font-size: 13px; }
+
+  /* status strip */
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin: 18px 0 0; }
+  .tile { background: var(--surface); border: 1px solid var(--hair); border-radius: 14px; padding: 14px 16px; }
+  .tile .k { font-size: 12px; color: var(--ink-3); letter-spacing: .04em; text-transform: uppercase; }
+  .tile .v { font: 600 28px/1.2 ui-serif, Georgia, serif; margin-top: 2px; }
+  .tile .d { font-size: 13px; color: var(--ink-2); }
+
+  /* charts */
+  .chart { position: relative; width: 100%; }
+  .chart svg { display: block; width: 100%; height: auto; overflow: visible; }
+  .axis text { fill: var(--ink-3); font-size: 11px; }
+  .axis line, .axis path { stroke: var(--grid); }
+  .gridline { stroke: var(--grid); stroke-width: 1; }
+  .ptitle { fill: var(--ink-2); font-size: 12px; font-weight: 600; }
+  .tip { position: absolute; pointer-events: none; z-index: 5; min-width: 160px; max-width: 280px; padding: 8px 10px; border-radius: 10px;
+    background: var(--surface); border: 1px solid var(--hair); box-shadow: 0 6px 20px -8px rgba(0,0,0,.35); font-size: 12.5px; line-height: 1.45; opacity: 0; transition: opacity .08s; }
+  .tip b { font-weight: 650; }
+  .legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12.5px; color: var(--ink-2); margin: 8px 0 0; }
+  .legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+  .legend i.ln { height: 2px; border-radius: 0; vertical-align: 3px; }
+  .range { display: flex; gap: 6px; margin: 0 0 10px; }
+  .range button { font: 600 12px/1 ui-sans-serif, system-ui; padding: 6px 10px; border-radius: 999px; border: 1px solid var(--hair);
+    background: transparent; color: var(--ink-2); cursor: pointer; }
+  .range button[aria-pressed="true"] { background: var(--accent); color: var(--surface); border-color: var(--accent); }
+
+  /* tables */
+  .tbl { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  .tbl th { text-align: left; font-size: 11.5px; letter-spacing: .04em; text-transform: uppercase; color: var(--ink-3); font-weight: 600;
+    padding: 6px 8px; border-bottom: 1px solid var(--hair); }
+  .tbl td { padding: 7px 8px; border-bottom: 1px solid var(--grid); vertical-align: top; }
+  .tbl td.r, .tbl th.r { text-align: right; font-variant-numeric: tabular-nums; }
+  .scroll { overflow-x: auto; }
+  .pill { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 11.5px; font-weight: 650; border: 1px solid var(--hair); color: var(--ink-2); white-space: nowrap; }
+  .pill.on { color: var(--surface); background: var(--accent-2); border-color: var(--accent-2); }
+  .pill.t { color: var(--accent); border-color: var(--accent); }
+  .status { font-weight: 650; white-space: nowrap; }
+  .status.ok { color: var(--good); } .status.bad { color: var(--bad); } .status.wait { color: var(--wait); }
+  .dot { display: inline-block; width: 10px; height: 10px; border-radius: 99px; margin-right: 6px; vertical-align: 0; }
+  details { margin-top: 10px; } summary { cursor: pointer; color: var(--accent); font-weight: 600; font-size: 13.5px; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  @media (max-width: 760px) { .two { grid-template-columns: 1fr; } }
+  .note { background: var(--surface-2); border-radius: 10px; padding: 10px 14px; font-size: 13.5px; color: var(--ink-2); }
+  #netFilters .range { flex-wrap: wrap; }
+  #netChart { overflow: hidden; }
+  #netStory { margin: 4px 0 10px; font-size: 14.5px; }
+  footer { padding: 30px 0 60px; color: var(--ink-3); font-size: 13px; }
+  .back { position: fixed; top: 14px; right: 14px; z-index: 50; padding: 6px 12px; border-radius: 999px; font: 600 12.5px/1.2 ui-sans-serif, system-ui;
+    text-decoration: none; color: var(--ink); background: var(--surface); border: 1px solid var(--hair); }
+</style>
+</head>
+<body>
+<a class="back" href="../index.html">&larr; All homework</a>
+
+<header class="wrap">
+  <p class="eyebrow"><a href="../index.html">FINTECH 535</a> &middot; Final project, part 1 &middot; Investment thesis</p>
+  <h1>Footprints Before the News</h1>
+  <div class="thesis" id="thesis"><span class="num">1</span>
+    People who know first leave footprints before the news, in volume, options and prediction-market bets, and when those footprints line up across
+    linked markets, the move that follows beats what options priced in.
+  </div>
+  <p class="sub">This page is the thesis and the tracker that tests it. A GitHub Action reruns the tracker after every US close, so the numbers below stay current.</p>
+  <div class="card glance">
+    <h3 style="margin-top:0">At a glance</h3>
+    <table class="tbl">
+      <tr><td><a href="#thesis">1. Thesis</a></td><td>Informed traders hide in the price but not in the volume, so footprints show up before the news.</td></tr>
+      <tr><td><a href="#horizon">2. Time horizon</a></td><td>The edge should last about 1&ndash;2 years (until enforcement catches up). Trades last 15&ndash;60 minutes for minute bursts and 1&ndash;5 days (about 3) for daily flags.</td></tr>
+      <tr><td><a href="#tracker">3. Tracker</a></td><td>41 assets scored nightly on quiet volume, breaks from the pack, minute bursts, options flow and greeks, and prediction-market jumps and odd bettors. The Footprint Index counts assets scoring 2+, and the web shows today's moves across the market.</td></tr>
+      <tr><td><a href="#wrong">4. Wrong if</a></td><td>(1) Moves after flags don't beat what options priced. (2) Minute bursts follow through no more often than scheduled news. (3) Footprints show up after the headline, not before.</td></tr>
+      <tr><td><a href="#alpha">5. Alpha / cost</a></td><td>Roughly 0.3&ndash;0.8% gross per flagged trade over 1&ndash;5 days, and 0.2&ndash;0.6% net in stock. Options cost 2&ndash;5% of premium each way.</td></tr>
+      <tr><td><a href="#macro">6. Macro</a></td><td>It works because 2026 is a headline market. Geopolitics and regulation matter most, the Fed less, and selloffs push correlations up.</td></tr>
+    </table>
+  </div>
+  <div class="tiles" id="tiles"></div>
+</header>
+
+<main class="wrap">
+
+<!-- ================= WHY ================= -->
+<section id="why">
+  <div class="card">
+    <h2>Why I believe it</h2>
+    <p>The clearest examples come from this spring. On March 23, about $500M in oil futures were sold in the 15 minutes before the President posted that
+      strikes on Iran's energy infrastructure would be delayed, and oil fell about 14% within minutes. On April 7, about $950M in bets against oil went in
+      hours before the two-week ceasefire. On April 17, $760M in Brent sell orders hit about 20 minutes before Iran's foreign minister said the Strait of
+      Hormuz would stay open. The CFTC and DOJ are now investigating these trades.</p>
+    <p><b>The key detail:</b> in one of these cases, $430M of sell orders only moved Brent from $100.91 to $100.66. A minute after the announcement it was
+      at $96.83. The informed side kept the price quiet, but the volume gave it away. That's the "quiet volume" footprint this tracker looks for.</p>
+    <p>Prediction markets show the same pattern. Before the Iran strike and the ceasefire, dozens of brand-new Polymarket wallets placed large, accurate
+      bets hours ahead, and a Harvard study estimates about $143M in Polymarket profits may have come from inside information.</p>
+    <p>The Nvidia story in November shows the second idea: markets are a web. When the board opened its investigation on Sunday, November 8, Nvidia fell
+      while Asian chip suppliers rallied. When Jensen Huang resigned on November 12, the shock spread to TSM and MU. News about one node moves its
+      neighbors, so a neighbor moving <i>before</i> the news is a clue.</p>
+    <p class="muted small">Academic support: Pan &amp; Poteshman (2006) found that stocks with low put-call ratios beat stocks with high ones by more than
+      40bp the next day and more than 1% over the next week. That predictive power came from option volume that wasn't public, so it is evidence that
+      informed traders show up in volume first. It also warns that public versions of the signal are weaker.</p>
+    <p class="muted small">Option <i>prices</i> leak information too, not just volume. Cremers &amp; Weinbaum (2010) found that stocks with relatively
+      expensive calls beat stocks with relatively expensive puts by about 50bp a week. Xing, Zhang &amp; Zhao (2010) found that stocks with the steepest
+      put smirks underperformed by about 10.9% a year, consistent with informed traders who have bad news buying out-of-the-money puts. That's the basis
+      for the greeks layer.</p>
+  </div>
+</section>
+
+
+<!-- ================= CASE STUDY ================= -->
+<section id="case">
+  <div class="card">
+    <h2>Case study: Jensen Huang's return (Nov 17&ndash;23)</h2>
+    <p>This is the cleanest example of the whole thesis, and it happened while I was writing it. On Tuesday the board said publicly it would <i>not</i>
+      bring Huang back, and Polymarket gave a return by November 30 about 6% odds. Six days later he was CEO again. In between, footprints showed up in
+      every market the tracker watches:</p>
+    <div class="scroll"><table class="tbl">
+      <thead><tr><th>When (ET)</th><th>Market</th><th>What happened</th><th>Footprint</th></tr></thead>
+      <tbody>
+        <tr><td>Tue Nov 17</td><td>News</td><td>Board says it "does not intend to reinstate" Huang. Huang says he'd be honored to return.</td><td class="muted">the public view</td></tr>
+        <tr><td>Nov 17 &ndash; Sun 1:29pm</td><td>Polymarket</td><td>An account idle for almost a year buys "No Change" (no new CEO named) three times, about $18.2K. It later sells for about $128.3K.</td><td><span class="pill on">dormant wallet</span></td></tr>
+        <tr><td>Fri Nov 20</td><td>NVDA options</td><td>Stock closes at $125.53 after falling all week. Institutions keep building positions for a rebound anyway, and one trader's $19K of calls turns into $376,900.</td><td><span class="pill on">calls against the tape</span></td></tr>
+        <tr><td>Sun Nov 22, 1&ndash;6pm</td><td>Kalshi</td><td>21 trades of $3K or more, about $113K in total, for a potential payout of about $828K.</td><td><span class="pill on">big-trade burst</span></td></tr>
+        <tr><td>Sun 3:41pm &ndash; Mon 8:47am</td><td>Polymarket</td><td>An account that usually bets on the Iran war turns about $29K into about $200K. A sports bettor with $47M in volume makes its only recent non-sports bet: $18,874 in, $101,901 out.</td><td><span class="pill on">out-of-lane wallets</span></td></tr>
+        <tr><td>Mon Nov 23</td><td>NVDA premarket</td><td>Nvidia announces the reinstatement. Premarket gains go from 7% to more than 31%.</td><td class="muted">the news</td></tr>
+      </tbody>
+    </table></div>
+    <p style="margin-top:12px">Two lessons went straight into the tracker. First, the <b>options market</b> showed the bet before the stock did: calls were
+      piling up while the price kept falling. So options flow is now a footprint, with extra attention when it leans against the stock's own move. Second,
+      on prediction markets the <b>odds</b> barely moved before the news. The tell was <b>who</b> was betting: a wallet that had been asleep for a year,
+      an Iran-war bettor and a sports bettor all piling into the same longshot. So the tracker now checks the history of every wallet that puts $5K or
+      more into a linked market. There's also a third lesson from the options side: buying that much near-term upside while the stock falls usually
+      lifts front-month implied vol and makes calls expensive relative to puts, which is exactly what the greeks layer looks for.</p>
+    <p class="muted small">It also matches the timing you'd expect: positions built Friday, the decision made over the weekend (the President said he
+      spoke with Huang on Sunday after the board voted), and the announcement before Monday's open. The spring oil trades followed a similar
+      before-the-weekend pattern, so the tracker tags Friday footprints.</p>
+  </div>
+</section>
+
+<!-- ================= HORIZON ================= -->
+<section id="horizon">
+  <div class="card">
+    <h2><span class="num">2</span>Time horizon</h2>
+    <p><b>How long the thesis should work: about 1 to 2 years.</b> It depends on three things that are true right now. Policy keeps moving markets through
+      sudden posts and leaks, prediction markets are growing faster than anyone can police them, and enforcement is slow. The CFTC and DOJ probes and the
+      new prediction-market bills are the clock on this edge. If they start catching people, the footprints get smaller.</p>
+    <p><b>How long each trade lasts depends on the footprint:</b></p>
+    <ul>
+      <li><b>Minute bursts:</b> 15 to 60 minutes. The oil trades paid off within half an hour. A nightly job can't catch these live, so for now they're evidence that raises conviction on the next day's trade. If Sanji can take intraday orders later, these become their own trades.</li>
+      <li><b>Daily confluence (score &ge; 2):</b> 1 to 5 trading days, about 3 on average. That matches the window where Pan &amp; Poteshman found option volume still predicted returns.</li>
+      <li><b>Slow positioning:</b> weeks to months. Someone who knows early may build a position slowly. The tracker keeps every burst and odds jump in an archive (<code>events.json</code>, <code>pm_log.json</code>), so we can look back at what happened before each big move.</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ================= TRACKER ================= -->
+<section id="tracker">
+  <div class="card">
+    <h2><span class="num">3</span>The tracker</h2>
+    <p><b>Definition.</b> Every weekday after the close, each of 41 assets (indexes, Treasuries, the dollar, oil, gas, gold, silver, copper, bitcoin, the
+      Mag 7, semis, energy, defense and airlines) gets a <b>footprint score</b>:</p>
+    <ul>
+      <li><b>Quiet volume (+1):</b> daily volume at least 2 standard deviations above its 20-day normal, while the price move stays under 1 standard deviation.</li>
+      <li><b>Break from the pack (+1):</b> each asset's move is predicted from its 4 closest neighbors over the last 60 days. If the miss is bigger than 2.5 standard deviations, it broke away.</li>
+      <li><b>Minute burst (+1):</b> a 1-minute bar with at least 8x normal volume (robust z &ge; 4) and almost no price change. Bursts within 3 minutes of known public times (8:30 data, 10:30 oil inventories, settlements, the open and close, 2pm FOMC) don't count.</li>
+      <li><b>Options flow (+1):</b> on 18 option-heavy names, near-term contracts (45 days or less) trading at least 1.5x their open interest, so mostly brand-new positions, adding up to $2M or more. After two weeks of history, it has to be unusual for that name specifically. "Against the tape" marks flow that leans the opposite way to the stock's move.</li>
+      <li><b>Greeks and the vol surface (counts with options flow; +1.5 if both fire):</b> greeks are computed for every contract with Black-Scholes, using CBOE's implied vols or vols solved from the mid. It's a footprint if: (a) front-month ATM implied vol jumps 10%+ on a day the stock barely moved; (b) the front month sits 5+ vol points over the ~35-day month with <i>no earnings</i> in between, meaning someone is paying for an event nobody has announced; or (c) skew shifts 3+ vol points overnight, either calls getting expensive versus puts (bullish) or puts getting expensive versus at-the-money calls (bearish). After 8 nights of history, (a) and (c) use z-scores instead.</li>
+      <li><b>Prediction markets (+1):</b> either a linked Polymarket or Kalshi market moves at least 8 points within an hour, <i>or</i> someone puts $5K+ into a linked market from a wallet that's brand new, has been dormant 30+ days, or usually bets on something else entirely (for example, a sports bettor's first Nvidia bet), <i>or</i> Kalshi sees 5+ trades over $3K in a day. Iran questions link to oil, Fed questions to Treasuries, CEO questions to the stock and its suppliers.</li>
+      <li><b>Upstream (+0.5):</b> an asset that normally moves the day <i>before</i> this one (the arrows in the web below) had a footprint today.</li>
+    </ul>
+    <p>An asset is <b>flagged</b> at a score of 2 or more. The <b>Footprint Index</b> is how many assets are flagged each day.</p>
+
+    <h3>Footprint Index</h3>
+    <div class="range" id="range" role="group" aria-label="Time range">
+      <button data-d="63">3M</button><button data-d="126">6M</button><button data-d="252" aria-pressed="true">1Y</button><button data-d="9999">All</button>
+    </div>
+    <div class="chart" id="histChart"></div>
+    <p class="muted small">Top: assets flagged each day (bars). Below: the S&amp;P 500 and WTI crude on their own scales, so you can see whether footprints
+      come before big moves. History uses the daily parts of the score (quiet volume, breaks, upstream). Minute and prediction-market data only exist from
+      the day the tracker went live, and that archive grows every night.</p>
+    <details><summary>Table view (last 30 sessions)</summary><div class="scroll"><table class="tbl" id="histTable"></table></div></details>
+  </div>
+
+  <div class="card">
+    <h3 style="margin-top:0">Today's footprints</h3>
+    <div class="scroll"><table class="tbl" id="todayTable"></table></div>
+    <p class="muted small" style="margin-top:8px"><span class="pill t">Sanji</span> marks the names the course server can trade today (TSLA, NVDA, MSFT). Everything else is tracked as evidence.</p>
+  </div>
+
+  <div class="card">
+    <h3 style="margin-top:0">The web: who moves with whom</h3>
+    <p class="small muted">A market heat map in web form. Each bubble is an asset, colored by today's move: green up, red down, darker for bigger,
+      measured against the move options priced for the day (or the usual daily move when there are no options). Each sector keeps its own spot, so the map looks the
+      same every day and only the colors change. Lines join each asset to its (up to) 4 closest partners, correlated above 0.55 over the last 60
+      sessions. A line stays gray unless both ends really moved today; then it turns green or red. A purple dashed line means the two went opposite
+      ways on heavy volume, a hint that money rotated from one to the other. The sentence on top is written automatically from the same data. Drag bubbles, drag the background to pan, scroll to
+      zoom, and click a bubble to pin its details.</p>
+    <div id="netFilters"></div>
+    <div id="netStory"></div>
+    <div class="chart" id="netChart"></div>
+    <div class="legend" id="netLegend"></div>
+    <div class="note" id="netDetail" style="margin-top:12px"></div>
+  </div>
+
+  <div class="two" style="margin-top:18px">
+    <div class="card">
+      <h3 style="margin-top:0">Minute bursts (unscheduled)</h3>
+      <div class="scroll"><table class="tbl" id="minTable"></table></div>
+      <p class="muted small" style="margin-top:8px">"30m move" is the biggest move in the next 30 minutes. "Follow" is that move divided by a normal 30-minute move; 2x or more counts as followed through. "Linked" lists other markets that burst within 5 minutes.</p>
+    </div>
+    <div class="card">
+      <h3 style="margin-top:0">Prediction markets</h3>
+      <div class="scroll"><table class="tbl" id="pmTable"></table></div>
+      <p class="muted small" style="margin-top:8px">Polymarket and Kalshi markets that map to the universe, sorted by the biggest one-hour move in the last day.</p>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:18px">
+    <h3 style="margin-top:0">Options flow: new positions tonight</h3>
+    <div class="scroll"><table class="tbl" id="optTable"></table></div>
+    <p class="muted small" style="margin-top:8px">"New-position $" is premium traded in contracts whose volume beat 1.5x their open interest. "Lean" runs from -1 (all puts) to +1 (all calls), counting a contract as bought when its last trade printed at or above the mid. Closing quotes can't prove who was buying, so treat the lean as a hint.</p>
+  </div>
+
+  <div class="card">
+    <h3 style="margin-top:0">Greeks and the vol surface</h3>
+    <div class="scroll"><table class="tbl" id="volTable"></table></div>
+    <p class="muted small" style="margin-top:8px"><b>Front IV</b>: at-the-money implied vol for the first expiry 5+ days out (overnight change in brackets).
+      <b>Term</b>: front minus ~35-day IV; positive means people are paying for something soon. <b>Call&minus;put</b>: call IV minus put IV at the same
+      strikes, weighted by open interest (Cremers &amp; Weinbaum); positive means calls are in demand. <b>Smirk</b>: 95% put IV minus at-the-money call IV
+      (Xing, Zhang &amp; Zhao); rising means crash protection is in demand. <b>New &Delta;</b>: dollar delta of tonight's new positions, signed by
+      bought or sold, and as a share of the stock's dollar volume. <b>New vega</b>: dollars gained per vol point. <b>Dealer &Gamma;</b>: dealer gamma
+      per 1% move, assuming customers are long calls and puts. Negative means dealers have to chase moves, so moves get bigger. That doesn't change the
+      score, but it helps size the bet.</p>
+  </div>
+
+  <div class="card">
+    <h3 style="margin-top:0">Who's betting: out-of-place wallets</h3>
+    <div class="scroll"><table class="tbl" id="walTable"></table></div>
+    <p class="muted small" style="margin-top:8px">Wallets that put $5K or more into a linked Polymarket market in the last 48 hours, with what they usually do. Polymarket trades are public on-chain; Kalshi accounts are anonymous, so Kalshi only shows bursts of $3K+ trades.</p>
+  </div>
+</section>
+
+<!-- ================= WRONG IF ================= -->
+<section id="wrong">
+  <div class="card">
+    <h2><span class="num">4</span>I'm wrong if&hellip;</h2>
+    <p class="small muted">Each check updates live from the tracker. "Not enough data" means the sample is still too small to judge.</p>
+    <table class="tbl" id="wrongTable"></table>
+  </div>
+</section>
+
+<!-- ================= ALPHA ================= -->
+<section id="alpha">
+  <div class="card">
+    <h2><span class="num">5</span>Rough alpha and costs</h2>
+    <p><b>Gross edge.</b> Pan &amp; Poteshman's informed-volume signal earned about 40bp a day and 1% a week, but that came from data that wasn't public.
+      My public version will be weaker. My rough guess: flagged trades capture <b>0.3% to 0.8% per trade over 1 to 5 days</b> on liquid stocks and ETFs,
+      with a hit rate a little above a coin flip (about 55%). Most flags will be noise, like someone placing one big dumb order. The edge comes from the
+      few real ones being much bigger than normal.</p>
+    <p><b>Greeks.</b> Cremers &amp; Weinbaum's call-minus-put spread earned about 50bp a week in the original study, but they also found the
+      effect shrank over their sample as markets learned. I treat the greeks layer as a way to confirm direction and size the bet, not as a separate source of profit.
+      A negative dealer gamma reading says that if the news lands, the move will probably overshoot, which favors options over stock.</p>
+    <p><b>Costs.</b> Stocks and ETFs like SPY, NVDA and USO cost about 1 to 3bp per side in spread, so costs barely matter there. Short-dated options on
+      TSLA, NVDA or MSFT cost much more: a 2% to 5% spread on premium each way, plus time decay if the move takes longer than expected. Options give more
+      payoff on the rare big move, so they fit this thesis, but only if the move ratio below stays well above 1.</p>
+    <p><b>Net.</b> In stock, roughly 0.2% to 0.6% per flagged trade after costs. In options it could be more or it could be negative, depending on how
+      fast moves follow. The live check replaces my guess with data:</p>
+    <div class="tiles" id="alphaTiles"></div>
+  </div>
+</section>
+
+<!-- ================= MACRO ================= -->
+<section id="macro">
+  <div class="card">
+    <h2><span class="num">6</span>Macro environment</h2>
+    <p>The thesis works because 2026 is a headline market. Big moves come from decisions a small group knows about before everyone else: war and
+      ceasefire calls, tariffs, and CEO exits. Liquid futures and prediction markets let that group trade large size fast, and while they can hide the
+      price impact, they can't hide the volume. <b>Geopolitics and oil</b> matter most. Most of the best evidence came from the Iran conflict, so if it
+      calms down, there will be fewer secrets worth trading and fewer real flags. <b>The dollar</b> is the best clue to which kind of day it is. On rates-driven days (strong data, a tough-sounding Fed), yields and the dollar rise
+      together, dollar/yen rises, and gold and silver fall. On fear-driven days (war, shocks), money runs to Treasuries, so yields fall while the dollar
+      still rises, gold often rises with it, and oil jumps if supply is at risk. The links in the web flip between those two kinds of day, which is why
+      the web is rebuilt every night instead of being fixed. <b>The Fed</b> matters less than you'd think: FOMC decisions are
+      scheduled and leaks are rare during the blackout period, so FOMC minutes are excluded and Fed odds on Kalshi and Polymarket are only a signal when
+      they jump outside scheduled data. Lower rates and risk-on markets raise volume everywhere, which makes quiet-volume flags noisier. <b>A tech
+      selloff</b> like the one after Huang's exit pushes correlations up, so everything moves together. That makes a real break rarer and more meaningful,
+      but it floods the volume side with false flags. That's why the web is rebuilt every night on a rolling 60-day window. Finally, <b>regulation</b> is
+      the biggest risk to the edge. If the CFTC/DOJ probes or prediction-market bills start catching people, the footprints should shrink, and wrong-if #3
+      watches for exactly that.</p>
+  </div>
+</section>
+
+<section id="sources">
+  <div class="card">
+    <h2>Sources</h2>
+    <ul class="small">
+      <li><a href="https://www.aa.com.tr/en/economy/traders-bet-millions-on-oil-contracts-minutes-before-trumps-post-on-postponing-iran-strikes-report/3877660">Anadolu / BBC data: oil bets 15 minutes before the March 23 post, 14% drop</a></li>
+      <li><a href="https://boereport.com/?p=551604">Reuters via BOE Report: $430M before the ceasefire extension, Brent $100.91 &rarr; $100.66 &rarr; $96.83; $950M on April 7</a></li>
+      <li><a href="https://www.nationthailand.com/business/trading-investment/40065181">$760M Brent sell-off before the April 17 Hormuz announcement</a></li>
+      <li><a href="https://www.aa.com.tr/en/americas/suspicious-800m-oil-trade-linked-to-trump-remarks-trigger-probe/3942896">WSJ via Anadolu: $800M+ traded in minutes; firms said they reacted to an earlier headline</a></li>
+      <li><a href="https://news3lv.com/news/nation-world/feds-probe-oil-futures-trades-ahead-of-trump-iran-strait-of-hormuz-announcements-prices-trading-activity-report">ABC via TNND: DOJ working with the CFTC</a></li>
+      <li><a href="https://www.ibtimes.co.uk/polymarket-insider-trading-iran-bets-1791155">Harvard study: about $143M in possible insider profits on Polymarket</a></li>
+      <li><a href="https://casino.org/news/suspicious-trading-polymarket-ahead-ceasefire">Dune: 50+ new wallets bet on the ceasefire hours before</a></li>
+      <li><a href="https://tech-insider.org/?p=56472">Nvidia investigation, November 8-9: Nvidia down, Asian suppliers up</a></li>
+      <li><a href="https://www.heygotrade.com/en/news/tsmc-tsm-stock-news-november-13-2026/">TSM -1.9% on Huang's resignation (November 12)</a> &middot; <a href="https://fool.com/investing/2026/11/12/why-micron-stock-dropped-on-thursday">MU down 4.8% the same morning</a></li>
+      <li><a href="https://www.citizen.org/news/prediction-market-bets-on-huangs-reinstatement-at-nvidia-must-be-investigated/">Public Citizen: Polymarket and Kalshi bets placed shortly before Huang's reinstatement</a></li>
+      <li><a href="https://www.bloomberg.com/news/articles/2026-11-24/nvidia-option-trader-scores-1-984-gain-after-ceo-huang-s-return">Bloomberg: $19K of Nvidia calls bought Friday turned into $376,900; institutions positioned for a rebound</a></li>
+      <li><a href="https://www.sec.gov/Archives/edgar/data/0001045810/000104581026000090/nov23pressrelease.htm">Nvidia 8-K, November 23: Huang reinstated</a> &middot; <a href="https://www.cnbc.com/2026/11/24/nvidia-jensen-huang-politics-market.html">CNBC: NVDA closed at $125.53 on Friday</a></li>
+      <li><a href="https://www.scmp.com/tech/article/3374812/nvidia-board-says-it-has-no-plans-reinstate-jensen-huang-ceo">SCMP: board said it had no plans to reinstate Huang (Nov 17)</a> &middot; <a href="https://www.cryptopolitan.com/prediction-market-price-huang-nvidia-return/">Polymarket odds about 6% for a return by Nov 30</a></li>
+      <li><a href="https://finance.biggo.com/news/de1f04fe-a8a1-49be-8c1e-9cbe5b9a472d">BigGo Finance: premarket gains went from 7% to more than 31%</a></li>
+      <li><a href="https://econpapers.repec.org/RePEc:cup:jfinqa:v:45:y:2010:i:02:p:335-367_00">Cremers &amp; Weinbaum, "Deviations from Put-Call Parity and Stock Return Predictability" (JFQA 2010)</a></li>
+      <li><a href="https://econpapers.repec.org/RePEc:cup:jfinqa:v:45:y:2010:i:03:p:641-662_00">Xing, Zhang &amp; Zhao, "What Does the Individual Option Volatility Smirk Tell Us About Future Equity Returns?" (JFQA 2010)</a></li>
+      <li><a href="https://www.nber.org/papers/w10925">Pan &amp; Poteshman, "The Information in Option Volume for Future Stock Prices" (RFS 2006)</a></li>
+      <li>Data: Yahoo Finance via yfinance (daily and 1-minute bars), CBOE delayed option quotes (yfinance as backup), <a href="https://docs.polymarket.com/">Polymarket</a> Gamma, CLOB and Data API v2 (trades and wallet activity), and the Kalshi public API (markets and trades).</li>
+    </ul>
+  </div>
+</section>
+
+</main>
+<footer class="wrap" id="foot"></footer>
+
+<script src="data/tracker_data.js"></script>
+<script>
+(function () {
+  const T = window.TRACKER;
+  const $ = (id) => document.getElementById(id);
+  const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+  const NS = "http://www.w3.org/2000/svg";
+  const el = (tag, attrs, parent) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; };
+  const pct = (x, d = 1) => x == null ? "-" : (x * 100).toFixed(d) + "%";
+  const fx = (x, d = 2) => x == null ? "-" : Number(x).toFixed(d);
+  const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  const scoreColor = (s) => s >= 3 ? css("--s3") : s >= 2 ? css("--s2") : s >= 1 ? css("--s1") : css("--s0");
+
+  if (!T) {
+    $("tiles").innerHTML = '<div class="note">The tracker hasn\'t run yet. It runs after each weekday close, or you can start it from the Actions tab ("Thesis footprint tracker").</div>';
+    return;
+  }
+
+  // ---------- tiles ----------
+  const flaggedToday = T.today.filter((r) => r.score >= 2);
+  const sanji = flaggedToday.filter((r) => r.tradeable).map((r) => r.sym);
+  const hist = T.history;
+  const lastN = hist.flagged.slice(-252);
+  const avg = lastN.reduce((a, b) => a + b, 0) / Math.max(1, lastN.length);
+  $("tiles").innerHTML = [
+    ["Footprint Index today", hist.flagged_today_full, `1-year average ${avg.toFixed(1)} a day`],
+    ["Flagged names", flaggedToday.length ? flaggedToday.slice(0, 4).map((r) => r.sym).join(", ") : "None", "score of 2 or more"],
+    ["Sanji names flagged", sanji.length ? sanji.join(", ") : "None", "TSLA, NVDA, MSFT"],
+    ["Data as of", T.asof, (T.demo ? "SIMULATED DATA - " : "") + "updated " + T.generated],
+  ].map(([k, v, d]) => `<div class="tile"><div class="k">${k}</div><div class="v">${esc(v)}</div><div class="d">${esc(d)}</div></div>`).join("");
+
+  // ---------- history chart: three stacked panels, one shared x, one crosshair ----------
+  let range = 252;
+  function drawHist() {
+    const box = $("histChart"); box.innerHTML = "";
+    const n = hist.dates.length, s = Math.max(0, n - range);
+    const D = hist.dates.slice(s), F = hist.flagged.slice(s), SP = hist.spy.slice(s), OIL = hist.oil.slice(s), TOP = hist.top.slice(s);
+    const W = Math.max(320, box.clientWidth), ml = 44, mr = 12, pw = W - ml - mr;
+    const panels = [{ h: 150, title: "Footprint Index (assets flagged)" }, { h: 90, title: "S&P 500 (SPY)" }, { h: 90, title: "WTI crude (CL=F)" }];
+    const gap = 30; let H = 16; panels.forEach((p) => { p.y = H + 16; H += 16 + p.h + gap; });
+    const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": "Footprint Index with S&P 500 and WTI crude" }, box);
+    const x = (i) => ml + (D.length <= 1 ? 0 : (i / (D.length - 1)) * pw);
+    const bw = Math.max(1, pw / D.length - 2);
+    // panel 1 bars
+    const p1 = panels[0], fmax = Math.max(3, ...F);
+    const y1 = (v) => p1.y + p1.h - (v / fmax) * p1.h;
+    el("text", { x: ml, y: p1.y - 6, class: "ptitle" }, svg).textContent = p1.title;
+    for (let t = 0; t <= fmax; t += Math.ceil(fmax / 4)) {
+      el("line", { x1: ml, x2: W - mr, y1: y1(t), y2: y1(t), class: "gridline" }, svg);
+      el("text", { x: ml - 6, y: y1(t) + 4, "text-anchor": "end", class: "axis" }, svg).innerHTML = `<tspan fill="${css("--ink-3")}" font-size="11">${t}</tspan>`;
+    }
+    F.forEach((v, i) => { if (v > 0) el("rect", { x: x(i) - bw / 2, y: y1(v), width: bw, height: Math.max(1, p1.y + p1.h - y1(v)), rx: Math.min(2, bw / 2), fill: v >= 3 ? css("--s3") : css("--s2") }, svg); });
+    // line panels
+    const linePanel = (p, arr) => {
+      const vals = arr.filter((v) => v != null); if (!vals.length) return null;
+      const lo = Math.min(...vals), hi = Math.max(...vals), pad = (hi - lo) * 0.08 || 1;
+      const y = (v) => p.y + p.h - ((v - lo + pad) / (hi - lo + 2 * pad)) * p.h;
+      el("text", { x: ml, y: p.y - 6, class: "ptitle" }, svg).textContent = p.title;
+      [lo, (lo + hi) / 2, hi].forEach((t) => {
+        el("line", { x1: ml, x2: W - mr, y1: y(t), y2: y(t), class: "gridline" }, svg);
+        el("text", { x: ml - 6, y: y(t) + 4, "text-anchor": "end", fill: css("--ink-3"), "font-size": 11 }, svg).textContent = t.toFixed(0);
+      });
+      let d = ""; arr.forEach((v, i) => { if (v != null) d += (d ? "L" : "M") + x(i).toFixed(1) + "," + y(v).toFixed(1); });
+      el("path", { d, fill: "none", stroke: css("--line"), "stroke-width": 2, "stroke-linejoin": "round" }, svg);
+      return y;
+    };
+    const y2 = linePanel(panels[1], SP), y3 = linePanel(panels[2], OIL);
+    // x labels
+    const ticks = 6;
+    for (let k = 0; k <= ticks; k++) {
+      const i = Math.round((k / ticks) * (D.length - 1));
+      el("text", { x: x(i), y: H - 4, "text-anchor": k === 0 ? "start" : k === ticks ? "end" : "middle", fill: css("--ink-3"), "font-size": 11 }, svg).textContent = new Date(D[i] + "T12:00:00").toLocaleDateString("en-US", { month: "short", year: "2-digit" }).replace(" ", " '");
+    }
+    // crosshair + tooltip
+    const cross = el("line", { y1: 14, y2: H - 18, stroke: css("--ink-3"), "stroke-width": 1, "stroke-dasharray": "3 3", opacity: 0 }, svg);
+    const dots = [y2, y3].map(() => el("circle", { r: 4, fill: css("--line"), stroke: css("--surface"), "stroke-width": 2, opacity: 0 }, svg));
+    const tip = document.createElement("div"); tip.className = "tip"; box.appendChild(tip);
+    const hit = el("rect", { x: ml, y: 0, width: pw, height: H, fill: "transparent" }, svg);
+    const move = (ev) => {
+      const r = svg.getBoundingClientRect(); const px = (ev.clientX - r.left) * (W / r.width);
+      const i = Math.max(0, Math.min(D.length - 1, Math.round(((px - ml) / pw) * (D.length - 1))));
+      cross.setAttribute("x1", x(i)); cross.setAttribute("x2", x(i)); cross.setAttribute("opacity", 1);
+      [[y2, SP], [y3, OIL]].forEach(([yf, arr], k) => { if (yf && arr[i] != null) { dots[k].setAttribute("cx", x(i)); dots[k].setAttribute("cy", yf(arr[i])); dots[k].setAttribute("opacity", 1); } });
+      tip.innerHTML = `<b>${D[i]}</b><br>Flagged: <b>${F[i]}</b>${TOP[i] ? " (" + esc(TOP[i]) + ")" : ""}<br>SPY: ${fx(SP[i])}<br>WTI: ${fx(OIL[i])}`;
+      const left = (x(i) / W) * r.width; tip.style.left = Math.min(r.width - 200, left + 12) + "px"; tip.style.top = "24px"; tip.style.opacity = 1;
+    };
+    hit.addEventListener("mousemove", move);
+    hit.addEventListener("mouseleave", () => { tip.style.opacity = 0; cross.setAttribute("opacity", 0); dots.forEach((d) => d.setAttribute("opacity", 0)); });
+  }
+  $("range").addEventListener("click", (e) => {
+    const b = e.target.closest("button"); if (!b) return;
+    range = +b.dataset.d; [...$("range").children].forEach((c) => c.setAttribute("aria-pressed", c === b)); drawHist();
+  });
+  drawHist();
+  window.addEventListener("resize", () => { clearTimeout(window.__rz); window.__rz = setTimeout(() => { drawHist(); drawNet(); }, 150); });
+
+  // history table
+  (function () {
+    const n = hist.dates.length, rows = [];
+    for (let i = n - 1; i >= Math.max(0, n - 30); i--) rows.push(`<tr><td>${hist.dates[i]}</td><td class="r">${hist.flagged[i]}</td><td>${esc(hist.top[i]) || "-"}</td><td class="r">${fx(hist.spy[i])}</td><td class="r">${fx(hist.oil[i])}</td></tr>`);
+    $("histTable").innerHTML = `<thead><tr><th>Date</th><th class="r">Flagged</th><th>Names</th><th class="r">SPY</th><th class="r">WTI</th></tr></thead><tbody>${rows.join("")}</tbody>`;
+  })();
+
+  // ---------- today's table ----------
+  (function () {
+    const rows = T.today.filter((r) => r.score >= 1).slice(0, 25);
+    const why = (r) => [
+      r.quiet ? `<span class="pill on">quiet volume</span>` : "",
+      r.break ? `<span class="pill on">break ${r.break_z > 0 ? "up" : "down"}</span>` : "",
+      r.minute_bursts ? `<span class="pill on">${r.minute_bursts} minute burst${r.minute_bursts > 1 ? "s" : ""}</span>` : "",
+      r.pm && r.pm.length ? `<span class="pill on" title="${esc(r.pm.join(" | "))}">odds jump</span>` : "",
+      r.options ? `<span class="pill on">options ${r.options.lean > 0 ? "calls" : "puts"}${r.options.against_tape ? " vs tape" : ""}</span>` : "",
+      r.vol ? `<span class="pill on" title="${esc(r.vol.join(" | "))}">vol surface</span>` : "",
+      r.wallets && r.wallets.length ? `<span class="pill on" title="${esc(r.wallets.join(" | "))}">odd bettors</span>` : "",
+      r.pre_weekend ? `<span class="pill">Friday</span>` : "",
+      r.upstream && r.upstream.length ? `<span class="pill">upstream: ${esc(r.upstream.join(", "))}</span>` : "",
+    ].join(" ");
+    $("todayTable").innerHTML = `<thead><tr><th>Asset</th><th class="r">Score</th><th>Footprints</th><th class="r">Move</th><th class="r">Move z</th><th class="r">Volume z</th><th>Lean</th></tr></thead><tbody>` +
+      (rows.length ? rows.map((r) => `<tr><td><span class="dot" style="background:${scoreColor(r.score)}"></span><b>${esc(r.sym)}</b> <span class="muted small">${esc(r.name)}</span> ${r.tradeable ? '<span class="pill t">Sanji</span>' : ""}</td>
+        <td class="r"><b>${r.score}</b></td><td>${why(r)}</td><td class="r">${pct(r.ret, 2)}</td><td class="r">${fx(r.ret_z, 1)}</td><td class="r">${fx(r.vol_z, 1)}</td>
+        <td>${r.direction > 0 ? "Up" : r.direction < 0 ? "Down" : "-"}</td></tr>`).join("") : `<tr><td colspan="7" class="muted">No footprints today.</td></tr>`) + "</tbody>";
+  })();
+
+  // ---------- network ----------
+  function drawNet() {
+    const box = $("netChart");
+    const N = T.network.nodes, L = T.network.leadlag;
+    const keep = new Set();
+    N.forEach((n) => T.network.edges.filter((e) => e.a === n.sym || e.b === n.sym)
+      .sort((x, y) => Math.abs(y.corr) - Math.abs(x.corr)).slice(0, 4).forEach((e) => keep.add(e)));
+    const E = T.network.edges.filter((e) => keep.has(e) || e.rotation);     // rotation lines always show
+    const W = Math.max(320, box.clientWidth), H = Math.min(640, Math.max(500, W * 0.6));
+    const C = { up: css("--up"), down: css("--down"), flat: css("--flat"), split: css("--split"), rot: css("--rot"), ring: css("--accent"), ink: css("--ink"), ink3: css("--ink-3"), edge: css("--edge"), zone: css("--surface-2") };
+    const hex = (h) => { h = h.replace("#", ""); return [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16)); };
+    const mix = (a, b, t) => { const A = hex(a), B = hex(b); return "rgb(" + A.map((v, i) => Math.round(v + (B[i] - v) * t)).join(",") + ")"; };
+    const zOf = (n) => n.move_z == null ? 0 : n.move_z;
+    const fill = (n) => { const z = zOf(n); if (Math.abs(z) < 0.5) return C.flat; const t = Math.min((Math.abs(z) - 0.5) / 2.5, 1); return mix(C.flat, z > 0 ? C.up : C.down, 0.3 + 0.7 * t); };
+    const maxDv = Math.max(1, ...N.map((n) => n.dollar_vol || 0));
+    const rad = (n) => n.dollar_vol ? 7 + 12 * Math.sqrt(n.dollar_vol / maxDv) : 7.5;
+    const idx = {}; N.forEach((n, i) => (idx[n.sym] = i));
+
+    // ---- fixed map: every sector has its own spot, every name its own seat, so the map never reshuffles ----
+    const ZONES = { "Index": [0.15, 0.27], "Rates": [0.15, 0.76], "Crypto": [0.32, 0.52], "Mag 7": [0.47, 0.27], "Semis": [0.47, 0.76],
+                    "Defense": [0.66, 0.52], "Commodity": [0.84, 0.27], "Energy": [0.84, 0.76] };
+    const members = {}; N.slice().sort((a, b) => a.sym.localeCompare(b.sym)).forEach((n) => (members[n.group] = members[n.group] || []).push(n.sym));
+    const zoneR = (g) => { const k = (members[g] || []).length; return k <= 1 ? 26 : 22 + (k >= 7 ? 12 : 11) * k; };
+    const sc = Math.min(1, W / 1000);
+    if (!NET.pos || NET.w !== W) {
+      NET.pos = N.map((n) => {
+        const z = ZONES[n.group] || [0.5, 0.5], m = members[n.group], k = m.length, j = m.indexOf(n.sym);
+        const r = k <= 1 ? 0 : (zoneR(n.group) - (k >= 7 ? 12 : 24)) * sc, a = (j / k) * 2 * Math.PI - Math.PI / 2;
+        return { x: z[0] * W + Math.cos(a) * r, y: z[1] * H + Math.sin(a) * r * 0.85 };
+      });
+      NET.w = W; NET.view = { x: 0, y: 0, k: 1 };
+    }
+    const P = NET.pos;
+
+    // ---- today's story: sectors that moved together, and where money rotated ----
+    const story = [], hot = new Set(), hotEdges = new Set();
+    Object.entries(members).forEach(([g, syms]) => {
+      if (syms.length < 2) return;
+      const zs = syms.map((s) => zOf(N[idx[s]])), mean = zs.reduce((a, b) => a + b, 0) / zs.length;
+      const same = zs.filter((z) => Math.sign(z) === Math.sign(mean) && Math.abs(z) >= 0.5).length / zs.length;
+      if (Math.abs(mean) >= 0.8 && same >= 0.6) { story.push({ w: Math.abs(mean), t: `${g} ${mean < 0 ? "fell" : "rose"} together` }); syms.forEach((s) => hot.add(s)); }
+    });
+    E.filter((e) => e.rotation).forEach((e) => {
+      const [from, to] = zOf(N[idx[e.a]]) < 0 ? [e.a, e.b] : [e.b, e.a];
+      story.push({ w: 9, t: `money rotated ${from} → ${to}` }); hot.add(from); hot.add(to); hotEdges.add(e);
+    });
+    N.filter((n) => n.score >= 2 && !hot.has(n.sym)).forEach((n) => { hot.add(n.sym); story.push({ w: 0.5, t: `footprints on ${n.sym}` }); });
+    story.sort((a, b) => b.w - a.w);
+    const sTxt = story.slice(0, 4).map((s) => s.t);
+    $("netStory").innerHTML = sTxt.length ? `<b>Today:</b> ${esc(sTxt.join("; ").replace(/^./, (c) => c.toUpperCase()))}.` : "<b>Today:</b> a quiet day, nothing moved together enough to call out.";
+    E.forEach((e) => { if (hot.has(e.a) && hot.has(e.b)) hotEdges.add(e); });
+
+    const vis = N.map((n) => NET.groups.has(n.group)
+      && (NET.move === "all" || (NET.move === "up" ? zOf(n) >= 0.5 : zOf(n) <= -0.5))
+      && (!NET.fpOnly || n.score >= 1));
+    const dimNode = (s) => NET.story && hot.size && !hot.has(s);
+
+    box.innerHTML = "";
+    const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": "Market web: bubbles colored by today's move, grouped by sector", style: "touch-action:none;cursor:grab" }, box);
+    const defs = el("defs", {}, svg);
+    const mk = el("marker", { id: "arrL", viewBox: "0 0 10 10", refX: 10, refY: 5, markerWidth: 6, markerHeight: 6, orient: "auto" }, defs);
+    el("path", { d: "M0,0 L10,5 L0,10 z", fill: C.ink3 }, mk);
+    const bg = el("rect", { x: 0, y: 0, width: W, height: H, fill: "transparent" }, svg);
+    const world = el("g", {}, svg);
+    const applyView = () => world.setAttribute("transform", `translate(${NET.view.x},${NET.view.y}) scale(${NET.view.k})`);
+    applyView();
+
+    // sector zones
+    Object.keys(members).forEach((g) => {
+      if (!NET.groups.has(g)) return;
+      const z = ZONES[g] || [0.5, 0.5], r = zoneR(g) * sc + 14;
+      el("ellipse", { cx: z[0] * W, cy: z[1] * H, rx: r, ry: r * 0.85, fill: C.zone, opacity: 0.6 }, world);
+      const t = el("text", { x: z[0] * W, y: z[1] * H - r * 0.85 - 6, "text-anchor": "middle", "font-size": 11, "font-weight": 650, fill: C.ink3, "letter-spacing": ".06em" }, world);
+      t.textContent = g.toUpperCase();
+    });
+
+    const strong = (e) => Math.abs(zOf(N[idx[e.a]])) >= 1 && Math.abs(zOf(N[idx[e.b]])) >= 1;
+    const eStyle = (e) => e.rotation ? { stroke: C.rot, dash: "6 4", w: 2.4, op: 0.95 }
+      : strong(e) && e.today === "up" ? { stroke: C.up, dash: "", w: 1.6, op: 0.75 }
+      : strong(e) && e.today === "down" ? { stroke: C.down, dash: "", w: 1.6, op: 0.75 }
+      : strong(e) && e.today === "split" ? { stroke: C.split, dash: "4 4", w: 1.2, op: 0.7 }
+      : { stroke: C.edge, dash: "", w: 0.8, op: 0.35 };
+    const eEls = [];
+    E.forEach((e) => {
+      const a = idx[e.a], b = idx[e.b]; if (a == null || b == null || !vis[a] || !vis[b]) return;
+      const st = eStyle(e), base = NET.story && hot.size && !hotEdges.has(e) ? Math.min(st.op, 0.18) : st.op;
+      const ln = el("line", { stroke: st.stroke, "stroke-width": st.w, "stroke-dasharray": st.dash, "stroke-linecap": "round", opacity: base }, world);
+      eEls.push({ ln, a, b, base, e });
+    });
+    const aEls = [];
+    if (NET.leads) L.forEach((e) => {
+      const a = idx[e.from], b = idx[e.to]; if (a == null || b == null || !vis[a] || !vis[b]) return;
+      aEls.push({ ln: el("line", { stroke: C.ink3, "stroke-width": 1.2, "stroke-dasharray": "2 3", "marker-end": "url(#arrL)", opacity: 0.9 }, world), a, b });
+    });
+    const nEls = [];
+    N.forEach((n, i) => {
+      if (!vis[i]) return;
+      const base = dimNode(n.sym) ? 0.4 : 1;
+      const g = el("g", { style: "cursor:pointer", opacity: base }, world);
+      const r = rad(n);
+      if (n.score >= 2) el("circle", { r: r + 4, fill: "none", stroke: C.ring, "stroke-width": 2.5 }, g);
+      el("circle", { r, fill: fill(n), stroke: css("--surface"), "stroke-width": 1.5 }, g);
+      const big = Math.abs(zOf(n)) >= 2 || n.score >= 2;
+      const t = el("text", { x: r + 4, y: 4, "font-size": big ? 11.5 : 10.5, "font-weight": big ? 700 : 500, fill: C.ink, style: "pointer-events:none;paint-order:stroke;stroke:" + css("--surface") + ";stroke-width:3px" }, g);
+      t.textContent = n.sym;
+      nEls.push({ g, i, base });
+    });
+    const place = () => {
+      nEls.forEach(({ g, i }) => g.setAttribute("transform", `translate(${P[i].x},${P[i].y})`));
+      eEls.forEach(({ ln, a, b }) => { ln.setAttribute("x1", P[a].x); ln.setAttribute("y1", P[a].y); ln.setAttribute("x2", P[b].x); ln.setAttribute("y2", P[b].y); });
+      aEls.forEach(({ ln, a, b }) => { const dx = P[b].x - P[a].x, dy = P[b].y - P[a].y, d = Math.hypot(dx, dy) || 1, rb = rad(N[b]) + 6;
+        ln.setAttribute("x1", P[a].x); ln.setAttribute("y1", P[a].y); ln.setAttribute("x2", P[b].x - dx / d * rb); ln.setAttribute("y2", P[b].y - dy / d * rb); });
+    };
+    place();
+
+    const tip = document.createElement("div"); tip.className = "tip"; box.appendChild(tip);
+    const neighbors = (i) => new Set(E.filter((e) => e.a === N[i].sym || e.b === N[i].sym).map((e) => idx[e.a === N[i].sym ? e.b : e.a]));
+    const focus = (i) => {
+      const nb = i == null ? null : neighbors(i);
+      nEls.forEach((o) => o.g.setAttribute("opacity", i == null ? o.base : (o.i === i || nb.has(o.i) ? 1 : 0.12)));
+      eEls.forEach((o) => o.ln.setAttribute("opacity", i == null ? o.base : (o.a === i || o.b === i ? 1 : 0.04)));
+      aEls.forEach((o) => o.ln.setAttribute("opacity", i == null ? 0.9 : (o.a === i || o.b === i ? 1 : 0.04)));
+    };
+    // yields are stored as level change / 10 (tracker.daily_returns), so x1000 = basis points
+    const moveTxt = (n) => n.ret == null ? "-" : (n.group === "Rates" && n.sym.startsWith("^") ? `${n.ret > 0 ? "+" : ""}${(n.ret * 1000).toFixed(0)} bps` : `${n.ret > 0 ? "+" : ""}${(n.ret * 100).toFixed(2)}%`) + (n.move_z != null ? ` (${n.move_z > 0 ? "+" : ""}${n.move_z.toFixed(1)}x the ${n.basis === "IV" ? "move options priced" : "usual daily move"})` : "");
+    // mini price chart for the click panel: price axis, dates, start line, % change, hover to read any day
+    const miniChart = (xs, n) => {
+      const D = hist.dates.slice(-(xs || []).length);
+      const pts = (xs || []).map((v, i) => ({ v, d: D[i] })).filter((p) => p.v != null);
+      if (pts.length < 2) return "";
+      const w = 300, h = 118, ml = 44, mr = 8, mt = 18, mb = 20, pw = w - ml - mr, ph = h - mt - mb;
+      const lo = Math.min(...pts.map((p) => p.v)), hi = Math.max(...pts.map((p) => p.v)), pad = (hi - lo) * 0.08 || Math.abs(hi) * 0.01 || 1;
+      const X = (i) => ml + (i / (pts.length - 1)) * pw, Y = (v) => mt + ph - ((v - lo + pad) / (hi - lo + 2 * pad)) * ph;
+      const first = pts[0].v, last = pts[pts.length - 1].v, chg = first ? last / first - 1 : 0, col = last >= first ? C.up : C.down;
+      const isYield = n.group === "Rates" && n.sym.startsWith("^");
+      const fmt = (v) => isYield ? v.toFixed(2) + "%" : Math.abs(v) >= 1000 ? v.toLocaleString(undefined, { maximumFractionDigits: 0 }) : v.toFixed(2);
+      const line = pts.map((p, i) => (i ? "L" : "M") + X(i).toFixed(1) + "," + Y(p.v).toFixed(1)).join("");
+      const area = line + `L${X(pts.length - 1).toFixed(1)},${mt + ph}L${ml},${mt + ph}Z`;
+      const md = (d) => d ? new Date(d + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "";
+      const ticks = [lo, (lo + hi) / 2, hi];
+      const id = "mc" + n.sym.replace(/[^A-Za-z0-9]/g, "");
+      return `<div class="mini" data-id="${id}" style="position:relative;width:${w}px">
+        <svg id="${id}" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" role="img" aria-label="${esc(n.sym)} last ${pts.length} sessions, ${(chg * 100).toFixed(1)}%" style="display:block;overflow:visible">
+          <defs><linearGradient id="${id}g" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="${col}" stop-opacity=".28"/><stop offset="1" stop-color="${col}" stop-opacity="0"/></linearGradient></defs>
+          <text class="mhead" x="${ml}" y="11" font-size="11.5" font-weight="650" fill="${C.ink}">${esc(fmt(last))} <tspan fill="${col}">${chg >= 0 ? "+" : ""}${(chg * 100).toFixed(1)}%</tspan> <tspan fill="${C.ink3}" font-weight="500">over ${pts.length} sessions</tspan></text>
+          ${ticks.map((t) => `<line x1="${ml}" x2="${w - mr}" y1="${Y(t).toFixed(1)}" y2="${Y(t).toFixed(1)}" stroke="${css("--grid")}"/><text x="${ml - 5}" y="${(Y(t) + 3.5).toFixed(1)}" text-anchor="end" font-size="10" fill="${C.ink3}">${esc(fmt(t))}</text>`).join("")}
+          <line x1="${ml}" x2="${w - mr}" y1="${Y(first).toFixed(1)}" y2="${Y(first).toFixed(1)}" stroke="${C.ink3}" stroke-dasharray="3 3" opacity=".7"/>
+          <path d="${area}" fill="url(#${id}g)"/>
+          <path d="${line}" fill="none" stroke="${col}" stroke-width="2" stroke-linejoin="round"/>
+          <circle cx="${X(pts.length - 1).toFixed(1)}" cy="${Y(last).toFixed(1)}" r="3.5" fill="${col}" stroke="${css("--surface")}" stroke-width="1.5"/>
+          <text x="${ml}" y="${h - 4}" font-size="10" fill="${C.ink3}">${esc(md(pts[0].d))}</text>
+          <text x="${w - mr}" y="${h - 4}" font-size="10" text-anchor="end" fill="${C.ink3}">${esc(md(pts[pts.length - 1].d))}</text>
+          <line class="mx" y1="${mt}" y2="${mt + ph}" stroke="${C.ink3}" stroke-width="1" opacity="0"/>
+          <circle class="md" r="3.5" fill="${col}" stroke="${css("--surface")}" stroke-width="1.5" opacity="0"/>
+          <rect class="mh" x="${ml}" y="${mt}" width="${pw}" height="${ph}" fill="transparent" style="cursor:crosshair"/>
+        </svg>
+      </div>`;
+    };
+    const wireMini = (n) => {
+      const svgM = document.getElementById("mc" + n.sym.replace(/[^A-Za-z0-9]/g, "")); if (!svgM) return;
+      const D = hist.dates.slice(-(n.spark || []).length), pts = (n.spark || []).map((v, i) => ({ v, d: D[i] })).filter((p) => p.v != null);
+      const w = 300, ml = 44, mr = 8, pw = w - ml - mr, mt = 18, ph = 118 - 18 - 20;
+      const lo = Math.min(...pts.map((p) => p.v)), hi = Math.max(...pts.map((p) => p.v)), pad = (hi - lo) * 0.08 || Math.abs(hi) * 0.01 || 1;
+      const X = (i) => ml + (i / (pts.length - 1)) * pw, Y = (v) => mt + ph - ((v - lo + pad) / (hi - lo + 2 * pad)) * ph;
+      const mx = svgM.querySelector(".mx"), dot = svgM.querySelector(".md"), head = svgM.querySelector(".mhead"), headHTML = head.innerHTML;
+      const isYield = n.group === "Rates" && n.sym.startsWith("^");
+      svgM.querySelector(".mh").addEventListener("mousemove", (ev) => {
+        const r = svgM.getBoundingClientRect(), i = Math.max(0, Math.min(pts.length - 1, Math.round(((ev.clientX - r.left) - ml) / pw * (pts.length - 1))));
+        mx.setAttribute("x1", X(i)); mx.setAttribute("x2", X(i)); mx.setAttribute("opacity", 0.6);
+        dot.setAttribute("cx", X(i)); dot.setAttribute("cy", Y(pts[i].v)); dot.setAttribute("opacity", 1);
+        const c = pts[i].v / pts[0].v - 1;
+        const md = new Date(pts[i].d + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" });
+        head.innerHTML = `${esc(isYield ? pts[i].v.toFixed(2) + "%" : pts[i].v.toFixed(2))} <tspan fill="${c >= 0 ? C.up : C.down}">${c >= 0 ? "+" : ""}${(c * 100).toFixed(1)}%</tspan> <tspan fill="${C.ink3}" font-weight="500">${esc(md)}, vs start</tspan>`;
+      });
+      svgM.querySelector(".mh").addEventListener("mouseleave", () => { mx.setAttribute("opacity", 0); dot.setAttribute("opacity", 0); head.innerHTML = headHTML; });
+    };
+    const detail = (i) => {
+      if (i == null) { $("netDetail").innerHTML = '<span class="muted">Click a bubble to pin its details here.</span>'; return; }
+      const n = N[i], mine = E.filter((e) => e.a === n.sym || e.b === n.sym).sort((x, y) => Math.abs(y.corr) - Math.abs(x.corr));
+      const word = { up: "rose together", down: "fell together", split: "went opposite ways", flat: "quiet" };
+      const o = (T.options || []).find((x) => x.sym === n.sym);
+      const row = (T.today || []).find((x) => x.sym === n.sym) || {};
+      const opt = o ? `<br><span class="muted small">Options:</span> front IV ${o.atm_iv == null ? "-" : (o.atm_iv * 100).toFixed(0) + "%"}${o.atm_iv_chg != null ? ` (${o.atm_iv_chg > 0 ? "+" : ""}${(o.atm_iv_chg * 100).toFixed(0)}% overnight)` : ""}
+        &middot; term ${o.term == null ? "-" : (o.term > 0 ? "+" : "") + (o.term * 100).toFixed(1) + " pts"} &middot; call&minus;put ${o.iv_spread == null ? "-" : (o.iv_spread > 0 ? "+" : "") + (o.iv_spread * 100).toFixed(1) + " pts"}
+        &middot; new-position lean ${fx(o.lean, 2)}${(o.vol_reasons || []).length ? " &middot; " + esc(o.vol_reasons.join("; ")) : ""}` : "";
+      const bets = (row.wallets || []).length ? `<br><span class="muted small">Odd bettors:</span> ${esc(row.wallets.join(" | "))}` : "";
+      $("netDetail").innerHTML = `<div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap"><div><b style="font-size:15px">${esc(n.sym)}</b> <span class="muted">${esc(n.name)} &middot; ${esc(n.group)}</span><br>
+        Today: <b>${esc(moveTxt(n))}</b> &middot; volume z ${fx(n.vol_z, 1)} &middot; footprint score <b>${n.score}</b></div>
+        <div>${miniChart(n.spark, n)}</div></div>
+        ${n.tags.length ? n.tags.map((t) => `<span class="pill on">${esc(t)}</span>`).join(" ") : ""}${opt}${bets}
+        <br><span class="muted small">Linked to:</span> ${mine.slice(0, 8).map((e) => { const x = e.a === n.sym ? e.b : e.a;
+          return `<span class="pill">${esc(x)} ${fx(e.corr)} &middot; ${e.rotation ? "rotation" : word[e.today]}</span>`; }).join(" ") || '<span class="muted">nothing above 0.55</span>'}
+        ${L.filter((e) => e.to === n.sym).length ? `<br><span class="muted small">Usually moves a day after:</span> ${esc(L.filter((e) => e.to === n.sym).map((e) => e.from).join(", "))}` : ""}
+        ${L.filter((e) => e.from === n.sym).length ? `<br><span class="muted small">Usually moves a day before:</span> ${esc(L.filter((e) => e.from === n.sym).map((e) => e.to).join(", "))}` : ""}`;
+      wireMini(n);
+    };
+    detail(NET.pinned);
+    if (NET.pinned != null && vis[NET.pinned]) focus(NET.pinned);
+
+    const toWorld = (ev) => { const r = svg.getBoundingClientRect(); const sx = (ev.clientX - r.left) * W / r.width, sy = (ev.clientY - r.top) * H / r.height;
+      return { x: (sx - NET.view.x) / NET.view.k, y: (sy - NET.view.y) / NET.view.k, sx, sy }; };
+    let drag = null;
+    nEls.forEach(({ g, i }) => {
+      g.addEventListener("pointerdown", (ev) => { ev.stopPropagation(); g.setPointerCapture(ev.pointerId); const w = toWorld(ev); drag = { i, dx: P[i].x - w.x, dy: P[i].y - w.y, moved: false }; });
+      g.addEventListener("pointermove", (ev) => {
+        if (drag && drag.i === i) { const w = toWorld(ev); P[i].x = w.x + drag.dx; P[i].y = w.y + drag.dy; drag.moved = true; place(); tip.style.opacity = 0; return; }
+        if (drag) return;
+        focus(NET.pinned ?? i);
+        const n = N[i], r = svg.getBoundingClientRect(), s = (P[i].x * NET.view.k + NET.view.x) / W * r.width, t = (P[i].y * NET.view.k + NET.view.y) / H * r.height;
+        tip.innerHTML = `<b>${esc(n.sym)}</b> ${esc(n.name)}<br>${esc(moveTxt(n))}${n.tags.length ? "<br>Footprints: " + esc(n.tags.join(", ")) : ""}`;
+        tip.style.left = Math.min(r.width - 240, s + 16) + "px"; tip.style.top = t + 12 + "px"; tip.style.opacity = 1;
+      });
+      g.addEventListener("pointerup", () => { if (drag && !drag.moved) { NET.pinned = NET.pinned === i ? null : i; detail(NET.pinned); focus(NET.pinned); } drag = null; });
+      g.addEventListener("pointerleave", () => { if (!drag) { tip.style.opacity = 0; focus(NET.pinned); } });
+    });
+    let pan = null;
+    bg.addEventListener("pointerdown", (ev) => { bg.setPointerCapture(ev.pointerId); const w = toWorld(ev); pan = { sx: w.sx, sy: w.sy, x: NET.view.x, y: NET.view.y, moved: false }; svg.style.cursor = "grabbing"; });
+    bg.addEventListener("pointermove", (ev) => { if (!pan) return; const w = toWorld(ev); NET.view.x = pan.x + w.sx - pan.sx; NET.view.y = pan.y + w.sy - pan.sy; pan.moved = true; applyView(); });
+    bg.addEventListener("pointerup", () => { if (pan && !pan.moved && NET.pinned != null) { NET.pinned = null; detail(null); focus(null); } pan = null; svg.style.cursor = "grab"; });
+    svg.addEventListener("wheel", (ev) => { ev.preventDefault(); const w = toWorld(ev); const k = Math.max(0.5, Math.min(3, NET.view.k * (ev.deltaY < 0 ? 1.12 : 1 / 1.12)));
+      NET.view.x = w.sx - w.x * k; NET.view.y = w.sy - w.y * k; NET.view.k = k; applyView(); }, { passive: false });
+
+    $("netLegend").innerHTML =
+      `<span><i style="background:${mix(C.flat, C.up, 1)}"></i>up</span><span><i style="background:${mix(C.flat, C.down, 1)}"></i>down (darker = bigger vs the move options priced)</span>` +
+      `<span><i class="ln" style="background:${C.up}"></i>both rose</span><span><i class="ln" style="background:${C.down}"></i>both fell</span>` +
+      `<span><i class="ln" style="height:3px;background:repeating-linear-gradient(90deg,${C.rot} 0 6px,transparent 6px 10px)"></i>rotation: opposite ways, both on heavy volume</span>` +
+      `<span><i class="ln" style="background:${C.edge}"></i>usually linked, quiet today</span>` +
+      `<span><i style="background:transparent;border:2.5px solid ${C.ring};border-radius:99px"></i>flagged (score 2+)</span>` +
+      (NET.leads ? `<span><i class="ln" style="background:${C.ink3}"></i>&rarr; usually moves a day before</span>` : "") +
+      `<span class="muted">size = dollar volume</span>`;
+  }
+  // ---------- web controls ----------
+  const NET = { pos: null, w: 0, view: { x: 0, y: 0, k: 1 }, groups: new Set(T.network.nodes.map((n) => n.group)), move: "all", fpOnly: false, leads: false, story: true, pinned: null };
+  (function () {
+    const groups = [...NET.groups];
+    const chip = (label, on, attrs) => `<button ${attrs} aria-pressed="${on}">${esc(label)}</button>`;
+    const paint = () => {
+      $("netFilters").innerHTML =
+        `<div class="range" role="group" aria-label="Sectors">${chip("All sectors", NET.groups.size === groups.length, 'data-g="*"')}${groups.map((g) => chip(g, NET.groups.has(g) && NET.groups.size !== groups.length, `data-g="${esc(g)}"`)).join("")}</div>
+         <div class="range" role="group" aria-label="Move and options">${["all", "up", "down"].map((m) => chip(m === "all" ? "All moves" : m === "up" ? "Up only" : "Down only", NET.move === m, `data-m="${m}"`)).join("")}
+           <span style="width:10px"></span>${chip("Highlight story", NET.story, 'data-t="story"')}${chip("Footprints only", NET.fpOnly, 'data-t="fp"')}${chip("Show who leads", NET.leads, 'data-t="lead"')}${chip("Reset view", false, 'data-t="reset"')}</div>`;
+    };
+    paint();
+    $("netFilters").addEventListener("click", (ev) => {
+      const b = ev.target.closest("button"); if (!b) return;
+      if (b.dataset.g) {
+        if (b.dataset.g === "*") NET.groups = new Set(groups);
+        else if (NET.groups.size === groups.length) NET.groups = new Set([b.dataset.g]);
+        else { NET.groups.has(b.dataset.g) ? NET.groups.delete(b.dataset.g) : NET.groups.add(b.dataset.g); if (!NET.groups.size) NET.groups = new Set(groups); }
+      }
+      if (b.dataset.m) NET.move = b.dataset.m;
+      if (b.dataset.t === "fp") NET.fpOnly = !NET.fpOnly;
+      if (b.dataset.t === "lead") NET.leads = !NET.leads;
+      if (b.dataset.t === "story") NET.story = !NET.story;
+      if (b.dataset.t === "reset") { NET.pos = null; NET.pinned = null; }
+      paint(); drawNet();
+    });
+  })();
+  drawNet();
+
+  // ---------- minute + prediction-market tables ----------
+  (function () {
+    const ev = (T.events_recent || []).slice().reverse().slice(0, 15);
+    $("minTable").innerHTML = `<thead><tr><th>Time (NY)</th><th>Asset</th><th class="r">Vol x</th><th class="r">30m move</th><th class="r">Follow</th><th>Linked</th></tr></thead><tbody>` +
+      (ev.length ? ev.map((e) => `<tr><td>${esc(e.time)}</td><td><b>${esc(e.sym)}</b></td><td class="r">${fx(e.vol_mult, 0)}x</td><td class="r">${e.pending ? "pending" : pct(e.fwd30, 2)}</td>
+        <td class="r">${e.follow == null ? "-" : `<span class="status ${e.followed ? "ok" : "muted"}">${fx(e.follow, 1)}x</span>`}</td><td class="small">${esc((e.cluster || []).filter((c) => c !== e.sym).join(", ")) || "-"}</td></tr>`).join("")
+        : `<tr><td colspan="6" class="muted">No unscheduled bursts yet.</td></tr>`) + "</tbody>";
+    const pm = (T.pm || []).slice(0, 12);
+    $("pmTable").innerHTML = `<thead><tr><th>Market</th><th class="r">Odds</th><th class="r">1h jump</th><th>Links to</th></tr></thead><tbody>` +
+      (pm.length ? pm.map((p) => `<tr><td class="small">${p.flagged ? '<span class="pill on">jump</span> ' : ""}${esc(p.question)} <span class="muted">(${esc(p.source)})</span>${p.jump_time ? `<br><span class="muted">${esc(p.jump_time)}</span>` : ""}</td>
+        <td class="r">${pct(p.price, 0)}</td><td class="r">${p.jump == null ? "-" : (p.jump > 0 ? "+" : "") + (p.jump * 100).toFixed(0) + " pts"}</td><td class="small">${esc((p.assets || []).slice(0, 4).join(", "))}</td></tr>`).join("")
+        : `<tr><td colspan="4" class="muted">No linked markets returned.</td></tr>`) + "</tbody>";
+  })();
+
+  // ---------- options + wallets ----------
+  (function () {
+    const money = (x) => x == null ? "-" : x >= 1e6 ? "$" + (x / 1e6).toFixed(1) + "M" : x >= 1e3 ? "$" + (x / 1e3).toFixed(0) + "K" : "$" + x.toFixed(0);
+    const O = (T.options || []).slice(0, 12);
+    $("optTable").innerHTML = `<thead><tr><th>Name</th><th class="r">New-position $</th><th class="r">Share of day</th><th class="r">Lean</th><th>Biggest contracts</th><th>Flag</th></tr></thead><tbody>` +
+      (O.length ? O.map((o) => `<tr><td><b>${esc(o.sym)}</b></td><td class="r">${money(o.unusual_prem)}</td><td class="r">${pct(o.unusual_share, 0)}</td>
+        <td class="r">${fx(o.lean, 2)}</td><td class="small">${esc((o.top || []).slice(0, 2).map((c) => `${c.contract} (${c.volume.toLocaleString()} vs ${c.oi.toLocaleString()} OI)`).join("; ")) || "-"}</td>
+        <td>${o.footprint ? `<span class="pill on">footprint${o.against_tape ? " &middot; vs tape" : ""}</span>` : '<span class="muted">-</span>'}</td></tr>`).join("")
+        : `<tr><td colspan="6" class="muted">No option chains returned tonight.</td></tr>`) + "</tbody>";
+    const pts = (x, sign = true) => { if (x == null) return "-"; const v = Math.round(x * 1000) / 10; return (sign && v > 0 ? "+" : "") + (v === 0 ? "0.0" : v.toFixed(1)); };
+    const sm = (x) => !x ? "-" : (x < 0 ? "-" : "") + money(Math.abs(x));
+    const V = (T.options || []).slice().sort((a, b) => (b.vol_footprint - a.vol_footprint) || ((b.term || 0) - (a.term || 0))).slice(0, 18);
+    $("volTable").innerHTML = `<thead><tr><th>Name</th><th class="r">Front IV</th><th class="r">Term</th><th class="r">Call&minus;put</th><th class="r">Smirk</th>
+      <th class="r">New &Delta;</th><th class="r">New vega</th><th class="r">Dealer &Gamma;</th><th>Signal</th></tr></thead><tbody>` +
+      (V.length ? V.map((o) => `<tr><td><b>${esc(o.sym)}</b>${o.earnings_in_front ? ' <span class="pill" title="earnings before the front expiry">earnings</span>' : ""}</td>
+        <td class="r">${o.atm_iv == null ? "-" : (o.atm_iv * 100).toFixed(0) + "%"}${o.atm_iv_chg != null ? ` <span class="muted small">(${o.atm_iv_chg > 0 ? "+" : ""}${(o.atm_iv_chg * 100).toFixed(0)}%)</span>` : ""}</td>
+        <td class="r">${pts(o.term)}</td><td class="r">${pts(o.iv_spread)}${o.iv_spread_chg != null ? ` <span class="muted small">(${pts(o.iv_spread_chg)})</span>` : ""}</td>
+        <td class="r">${pts(o.smirk)}${o.smirk_chg != null ? ` <span class="muted small">(${pts(o.smirk_chg)})</span>` : ""}</td>
+        <td class="r">${sm(o.net_delta_usd)}${o.delta_vs_stock ? ` <span class="muted small">(${(o.delta_vs_stock * 100).toFixed(0)}%)</span>` : ""}</td>
+        <td class="r">${sm(o.net_vega_usd)}</td><td class="r">${sm(o.gex)}</td>
+        <td class="small">${o.vol_footprint ? (o.vol_reasons || []).map((r) => `<span class="pill on">${esc(r)}</span>`).join(" ") : '<span class="muted">-</span>'}</td></tr>`).join("")
+        : `<tr><td colspan="9" class="muted">No option chains returned tonight.</td></tr>`) + "</tbody>";
+    const W = (T.wallets || []).slice(0, 12), K = (T.kalshi_bursts || []).filter((k) => k.flagged).slice(0, 5);
+    $("walTable").innerHTML = `<thead><tr><th>Market</th><th>Bettor</th><th class="r">In</th><th class="r">Avg price</th><th>History</th></tr></thead><tbody>` +
+      (W.length ? W.map((w) => `<tr><td class="small">${esc(w.question)} &rarr; <b>${esc(w.outcome)}</b><br><span class="muted">first buy ${esc(w.first)}</span></td>
+        <td class="small">${esc(w.name || w.wallet)}</td><td class="r">${money(w.usd)}</td><td class="r">${fx(w.avg_price, 2)}</td>
+        <td>${(w.tags || []).map((t) => `<span class="pill ${w.suspicious && !t.startsWith("longshot") ? "on" : ""}">${esc(t)}</span>`).join(" ") || '<span class="muted small">regular</span>'}</td></tr>`).join("")
+        : `<tr><td colspan="5" class="muted">No $5K+ bets on linked markets in the last 48 hours.</td></tr>`) +
+      K.map((k) => `<tr><td class="small">${esc(k.question)} <span class="muted">(Kalshi)</span></td><td class="small muted">anonymous</td><td class="r">${money(k.usd)}</td><td class="r">-</td><td><span class="pill on">${k.big_trades} trades over $3K</span></td></tr>`).join("") + "</tbody>";
+  })();
+
+  // ---------- wrong-if (live) ----------
+  (function () {
+    const S = T.stats, M = T.minute_stats;
+    const st = (ok, enough) => !enough ? `<span class="status wait">Not enough data</span>` : ok ? `<span class="status ok">Holding</span>` : `<span class="status bad">Failing</span>`;
+    const rows = [
+      ["1", "<b>Moves after a flag don't beat what was priced in.</b> After 30+ flagged days, the average 5-day move after a flag is less than 1.2x the move options priced (implied vol). Until enough implied-vol history builds up, the check uses the stock's usual 5-day move instead, which is a stricter bar since implied vol usually runs above realized.",
+        `Now: <b>${fx(S.move_ratio_5d)}x</b> over ${S.flagged.n} flagged days (1-day: ${fx(S.move_ratio_1d)}x)`, st((S.move_ratio_5d || 0) >= 1.2, S.flagged.n >= 30)],
+      ["2", "<b>Minute bursts are just noise.</b> After 50+ unscheduled bursts, they follow through no more often than the scheduled ones (public news), or less than 25% of the time.",
+        `Now: unscheduled ${pct(M.follow_rate_unscheduled, 0)} (${M.n_unscheduled}) vs scheduled ${pct(M.follow_rate_scheduled, 0)} (${M.n_scheduled}); linked bursts ${pct(M.follow_rate_clustered, 0)} (${M.n_clustered})`,
+        st((M.follow_rate_unscheduled || 0) >= 0.25 && (M.follow_rate_unscheduled || 0) > (M.follow_rate_scheduled || 0), M.n_unscheduled >= 50)],
+      ["3", "<b>The footprints come after the news, not before.</b> If most flagged bursts match a public headline that came first (some firms told the CFTC they were reacting to an earlier headline on March 23), it's fast reaction, not secret information. Same if bursts around big news fade to normal levels once enforcement kicks in.",
+        `Breaks continuing in the same direction over 5 days: <b>${pct(S.break_continue_rate, 0)}</b> of ${S.break_n}. Below 50% means breaks snap back, which points to noise rather than information.`,
+        st((S.break_continue_rate || 0) >= 0.5, S.break_n >= 30)],
+    ];
+    $("wrongTable").innerHTML = `<thead><tr><th>#</th><th>Wrong if</th><th>Live check</th><th>Status</th></tr></thead><tbody>` +
+      rows.map((r) => `<tr><td>${r[0]}</td><td>${r[1]}</td><td class="small">${r[2]}</td><td>${r[3]}</td></tr>`).join("") + "</tbody>";
+    $("alphaTiles").innerHTML = [
+      ["Move after a flag (5-day)", fx(S.move_ratio_5d) + "x", `vs normal; ${S.flagged.n} flagged days`],
+      ["Move after a flag (next day)", fx(S.move_ratio_1d) + "x", "1.0x = no edge"],
+      ["Breaks that keep going", pct(S.break_continue_rate, 0), `${S.break_n} breaks, 5-day window`],
+      ["Bursts that follow through", pct(M.follow_rate_unscheduled, 0), `${M.n_unscheduled} unscheduled bursts`],
+    ].map(([k, v, d]) => `<div class="tile"><div class="k">${k}</div><div class="v">${esc(v)}</div><div class="d">${esc(d)}</div></div>`).join("");
+  })();
+
+  $("foot").innerHTML = `Tracker generated ${esc(T.generated)}${T.demo ? " from SIMULATED data" : ""}. ${T.notes && T.notes.length ? "Notes: " + esc(T.notes.join("; ")) : ""}
+    Code: <a href="https://github.com/BigJayJayHuang/FIN---Adv-Algo-Trading/tree/main/thesis">thesis/tracker.py</a>. Not investment advice; a class project.`;
+})();
+</script>
+</body>
+</html>
