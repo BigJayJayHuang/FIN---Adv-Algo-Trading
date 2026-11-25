@@ -29,6 +29,8 @@ OPTION_SYMS = ["NVDA", "TSLA", "MSFT", "AAPL", "AMZN", "META", "GOOGL", "TSM", "
 
 OPT = {
     "max_dte": 45,
+    "min_dte": 5,                 # skip 0DTE / this-week contracts: volume beats open interest there every day
+    "baseline_nights": 8,         # options flow only flags once a name has this many nights of its own history
     "min_volume": 500,            # contracts
     "vol_oi": 1.5,                # volume >= 1.5x open interest = mostly new positions
     "min_contract_prem": 100_000,  # $ traded in that contract today
@@ -46,12 +48,15 @@ WALLET = {
     "off_lane_share": 0.10,       # < 10% of past trades on this topic
     "off_lane_min_hist": 20,
     "longshot": 0.20,             # average price paid at or under 20 cents
+    "max_price": 0.60,            # buying at 60c+ is betting with the crowd (or parking cash at 95c+), not a tip
+    "activity_limit": 1000,
     "max_wallets": 30,
     "kalshi_big": 3_000,
     "kalshi_burst": 5,            # this many $3k+ trades inside 24h
 }
 
 TOPICS = [
+    ("Sports", r"(counter-strike|\bcs2?\b|\bbo[135]\b|esports|\b(nfl|nba|mlb|nhl|ufc|fifa|premier league|champions league|super bowl|world series|vs\.?|match|game \d|cup|league of legends|dota|valorant)\b)"),
     ("Fed / rates", r"\b(fed|fomc|rate cut|rate hike|interest rate|powell|warsh|hassett|bps)\b"),
     ("Iran / oil / war", r"\b(iran|israel|hormuz|opec|oil|crude|saudi|houthi|ceasefire|strike|military|war|missile|venezuela)\b"),
     ("Russia / Ukraine", r"\b(russia|ukraine|putin|zelensky)\b"),
@@ -60,7 +65,6 @@ TOPICS = [
     ("Crypto", r"\b(bitcoin|btc|ethereum|eth|crypto|solana)\b"),
     ("Macro data", r"\b(recession|gdp|inflation|cpi|jobs|unemployment|payrolls|shutdown)\b"),
     ("Elections / politics", r"\b(election|senate|house|governor|president|trump|democrat|republican|poll|primary)\b"),
-    ("Sports", r"\b(nfl|nba|mlb|nhl|ufc|fifa|premier league|champions league|super bowl|world series|vs\.?|match|game \d|cup)\b"),
 ]
 
 
@@ -154,13 +158,14 @@ def demo_chains(seed: int = 3) -> dict:
             for k in np.arange(70, 131, 2.5):
                 for typ in "CP":
                     mny = (k - spot) / spot
-                    mid = max(0.05, 6 * math.exp(-abs(mny) * 8) + (spot - k if typ == "C" else k - spot) * (k < spot if typ == "C" else k > spot))
                     dte = (e - date(2026, 11, 24)).days
                     iv = 0.38 + 0.25 * mny ** 2 - 0.06 * mny + rng.normal(0, 0.004)
                     if s == "NVDA" and dte <= 14:          # event premium up front, calls bid
                         iv += 0.22 + (0.06 if typ == "C" else 0.0)
                     oi = int(rng.integers(200, 6000))
                     vol = int(oi * rng.uniform(0.05, 0.6))
+                    mid = float(bs(spot, np.array([k]), np.array([max(dte, 1) / 365]), np.array([iv]), np.array([typ == "C"]))[0][0])
+                    mid = max(mid, 0.02)
                     rows.append({"expiry": e, "type": typ, "strike": float(k), "bid": mid * 0.97, "ask": mid * 1.03,
                                  "last": mid, "volume": vol, "oi": oi, "iv": iv})
         df = pd.DataFrame(rows)
@@ -185,8 +190,9 @@ def scan_chain(df: pd.DataFrame, spot: float) -> dict:
     spread = (df["ask"] - df["bid"]).abs().replace(0, np.nan)
     df["aggr"] = ((df["last"] - mid) / spread).clip(-0.5, 0.5).fillna(0) * 2       # -1 sold .. +1 bought
     df["otm"] = np.where(df["type"] == "C", df["strike"] > spot * 1.02, df["strike"] < spot * 0.98)
+    dte_ok = df["dte"] >= OPT["min_dte"] if "dte" in df else True
     unusual = (df["volume"] >= OPT["min_volume"]) & (df["volume"] >= OPT["vol_oi"] * df["oi"].clip(lower=1)) \
-        & (df["prem"] >= OPT["min_contract_prem"])
+        & (df["prem"] >= OPT["min_contract_prem"]) & dte_ok
     u = df[unusual]
     tot_prem = float(df["prem"].sum())
     u_prem = float(u["prem"].sum())
@@ -234,8 +240,9 @@ def options_footprints(chains: dict, day_ret: dict, log: list[dict], asof: str, 
         vz, uz = z("total_volume", f["total_volume"]), z("unusual_prem", f["unusual_prem"])
         f["vol_z"], f["unusual_z"] = _f(vz, 2), _f(uz, 2)
         big = (f["unusual_prem"] or 0) >= OPT["flag_prem"] and (f["unusual_share"] or 0) >= OPT["flag_share"]
-        if uz is None:          # first ~2 weeks: absolute size + share of the day's option $
-            f["footprint"] = bool(big)
+        f["baseline_nights"] = len(hist)
+        if uz is None:          # first ~2 weeks: build this name's own baseline, don't flag yet
+            f["footprint"] = False
         else:                   # after that: unusual compared with this name's own normal
             f["footprint"] = bool((f["unusual_prem"] or 0) >= OPT["flag_prem"] / 4 and
                                   (uz >= OPT["vol_z"] or (vz is not None and vz >= OPT["vol_z"])))
@@ -244,7 +251,7 @@ def options_footprints(chains: dict, day_ret: dict, log: list[dict], asof: str, 
                                  and np.sign(f["lean"]) == -np.sign(r) and r != 0)
         out[s] = f
         log = [x for x in log if not (x["sym"] == s and x["date"] == asof)]
-        log.append({"date": asof, "sym": s, "total_volume": f["total_volume"], "total_oi": f["total_oi"],
+        log.append({"date": asof, "sym": s, "v": 2, "total_volume": f["total_volume"], "total_oi": f["total_oi"],
                     "unusual_prem": f["unusual_prem"], "lean": f["lean"], "atm_iv": f.get("atm_iv"),
                     "back_iv": f.get("back_iv"), "iv_spread": f.get("iv_spread"), "smirk": f.get("smirk"),
                     "gex": f.get("gex")})
@@ -297,11 +304,12 @@ def profile_wallet(acts: list[dict], market_condition: str, market_topic: str, f
 
 def judge_wallet(p: dict, notional: float, avg_price: float) -> list[str]:
     tags = []
-    if p["prior_trades"] == 0 or (p["age_days"] is not None and p["age_days"] <= WALLET["new_days"]):
+    if p["prior_trades"] < 10 and (p["age_days"] is None or p["age_days"] <= WALLET["new_days"]):
         tags.append("new wallet")
     elif p["days_since_prior"] is not None and p["days_since_prior"] >= WALLET["dormant_days"]:
         tags.append(f"dormant {p['days_since_prior']:.0f}d")
-    if p["prior_trades"] >= WALLET["off_lane_min_hist"] and (p["same_topic_share"] or 0) < WALLET["off_lane_share"]:
+    if p["prior_trades"] >= WALLET["off_lane_min_hist"] and (p["same_topic_share"] or 0) < WALLET["off_lane_share"] \
+            and p.get("usual_topic") not in (None, "Other"):
         tags.append(f"usually bets {p['usual_topic']}")
     if avg_price is not None and avg_price <= WALLET["longshot"]:
         tags.append("longshot")
@@ -346,7 +354,8 @@ def scan_wallets(markets: list[dict], fetch_trades, fetch_activity, now_ts: int)
             p = profile_wallet(acts, cond, mtopic, a["first"])
             avg = a["usd"] / a["shares"] if a["shares"] else None
             tags = judge_wallet(p, a["usd"], avg)
-            suspicious = any(t.startswith(("new", "dormant", "usually")) for t in tags)
+            suspicious = bool(avg is not None and avg <= WALLET["max_price"]
+                              and any(t.startswith(("new", "dormant", "usually")) for t in tags))
             found.append({
                 "question": m.get("question"), "slug": m.get("slug"), "outcome": outcome,
                 "wallet": (w or "")[:6] + "..." + (w or "")[-4:], "name": a["name"],
@@ -425,7 +434,7 @@ RF = 0.04
 VOLS = {
     "iv_pop": 0.10,          # front ATM IV up 10%+ vs last night...
     "quiet_rz": 1.0,         # ...while the stock moved under 1 std
-    "term_inv": 0.05,        # front IV 5+ vol points over the back month, no earnings in between
+    "term_inv": 0.10,        # front IV 10+ vol points over the back month, no earnings in between
     "ivs_chg": 0.03,         # call-minus-put IV spread moves 3+ vol points in a night
     "smirk_chg": 0.03,       # put smirk moves 3+ vol points in a night
     "ivs_abs": 0.05,         # first nights only (no history): spread this far from zero
@@ -473,11 +482,14 @@ def add_greeks(df: pd.DataFrame, spot: float, asof: date) -> pd.DataFrame:
     df["T"] = df["dte"].clip(lower=1) / 365
     call = (df["type"] == "C").values
     mid = (df["bid"].fillna(0) + df["ask"].fillna(0)) / 2
-    iv = df["iv"].where((df["iv"] > 0.02) & (df["iv"] < 5))
-    need = iv.isna() & (mid > 0)
-    if need.any():
-        iv.loc[need] = solve_iv(mid[need].values, spot, df.loc[need, "strike"].values, df.loc[need, "T"].values, call[need.values])
-    df["iv"] = iv
+    px = mid.where((df["bid"] > 0) & (df["ask"] > 0), df["last"]).fillna(0)
+    # Yahoo's implied-vol column is too noisy to trust; solve IV ourselves from the mid (or last trade).
+    intrinsic = np.where(call, np.maximum(spot - df["strike"], 0), np.maximum(df["strike"] - spot, 0))
+    ok = (px > intrinsic + 0.01) & (px > 0)
+    iv = pd.Series(np.nan, index=df.index)
+    if ok.any():
+        iv.loc[ok] = solve_iv(px[ok].values, spot, df.loc[ok, "strike"].values, df.loc[ok, "T"].values, call[ok.values])
+    df["iv"] = iv.where((iv > 0.02) & (iv < 4.9))
     _, d, g, v = bs(spot, df["strike"].values, df["T"].values, df["iv"].fillna(0.3).values, call)
     df["delta"], df["gamma"], df["vega"] = d, g, v
     return df
@@ -506,7 +518,7 @@ def vol_surface(df: pd.DataFrame, spot: float) -> dict:
         c = e[e["type"] == "C"].set_index("strike")
         p = e[e["type"] == "P"].set_index("strike")
         ks = c.index.intersection(p.index)
-        ks = [k for k in ks if abs(k / spot - 1) <= 0.10]
+        ks = [k for k in ks if abs(k / spot - 1) <= 0.05 and c.loc[k, "oi"] >= 100 and p.loc[k, "oi"] >= 100]
         if ks:
             w = (c.loc[ks, "oi"].fillna(0) + p.loc[ks, "oi"].fillna(0)).values + 1
             ivs = float(np.average(c.loc[ks, "iv"].values - p.loc[ks, "iv"].values, weights=w))
@@ -589,7 +601,4 @@ def vol_footprint(f: dict, hist: list[dict], rz: float | None, earnings: list[st
             if abs(d) >= thr or (zz is not None and abs(zz) >= VOLS["z"]):
                 reasons.append(f"{label if d * sgn > 0 else ('puts bid vs calls' if key == 'iv_spread' else 'put skew flatter')} ({d * 100:+.1f} pts)")
                 lean += sgn * np.sign(d)
-        elif key == "iv_spread" and abs(f[key]) >= VOLS["ivs_abs"]:
-            reasons.append(f"{'calls' if f[key] > 0 else 'puts'} {abs(f[key]) * 100:.0f} vol pts richer (first night)")
-            lean += np.sign(f[key])
     return {"vol_footprint": bool(reasons), "vol_reasons": reasons, "vol_lean": float(np.sign(lean))}

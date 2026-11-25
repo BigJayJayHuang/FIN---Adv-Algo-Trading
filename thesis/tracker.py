@@ -113,7 +113,8 @@ UNIVERSE = [
 ]
 SYMS = [u["sym"] for u in UNIVERSE]
 META = {u["sym"]: u for u in UNIVERSE}
-TRADEABLE = ["TSLA", "NVDA", "MSFT"]     # what the course server prices today
+TRADEABLE = ["TSLA", "NVDA", "MSFT"]
+SCHEMA = 2      # bump when a signal definition changes; older archive rows are dropped     # what the course server prices today
 
 # ----------------------------------------------------------------------------
 # Settings (everything the thesis depends on, in one place)
@@ -132,7 +133,9 @@ CFG = {
     "leadlag_max_in": 2,        # at most this many leaders per asset
     "flag_score": 2.0,          # confluence score to count as a flagged asset
     # minute bursts
-    "m_base": 120,              # baseline bars
+    "m_base": 120,              # bars for the typical 1-minute move
+    "m_days": 10,               # volume baseline = same minute-of-day over the last 10 sessions
+    "m_min_days": 3,
     "m_vol_z": 4.0,             # robust volume z
     "m_ret_z": 1.5,             # |1-min move| under this many std
     "m_min_mult": 8.0,          # and at least 8x the median minute volume
@@ -162,7 +165,7 @@ SCHEDULED_BY = {
 PM_MAP = [
     (r"\b(fed|fomc|rate cut|rate hike|interest rate|powell|warsh|hassett|basis points?|bps)\b", ["^TNX", "^IRX", "TLT", "SPY"]),
     (r"\b(iran|israel|hormuz|opec|oil|crude|saudi|houthi|venezuela|tehran)\b", ["CL=F", "BZ=F", "USO", "XLE", "JETS"]),
-    (r"\b(ceasefire|strike|strikes|war|military|invade|invasion|missile)\b", ["CL=F", "GC=F", "ITA", "LMT"]),
+    (r"(?<!counter-)\b(ceasefire|airstrikes?|strikes? on|military strike|war|military|invade|invasion|missile)\b", ["CL=F", "GC=F", "ITA", "LMT"]),
     (r"\b(russia|ukraine|putin|zelensky)\b", ["NG=F", "CL=F", "GC=F", "ITA"]),
     (r"\b(tariffs?|trade deal|china|xi|taiwan|export controls?)\b", ["SPY", "QQQ", "TSM", "NVDA", "AAPL"]),
     (r"\b(nvidia|nvda|jensen|huang)\b", ["NVDA", "SMH", "TSM", "MU"]),
@@ -433,6 +436,21 @@ def pm_assets(text: str) -> list[str]:
     return out
 
 
+def pm_skip(m: dict, price) -> bool:
+    """Not a tip: markets settling (odds pinned near 0/1), resolving within 2 days, or sports/esports."""
+    if flow.topic(m.get("question", "")) == "Sports":
+        return True
+    if price is not None and (price >= 0.97 or price <= 0.03):
+        return True
+    end = m.get("endDate") or m.get("end_date_iso")
+    try:
+        if end and (datetime.fromisoformat(str(end).replace("Z", "+00:00")) - datetime.now(timezone.utc)).total_seconds() < 2 * 86400:
+            return True
+    except ValueError:
+        pass
+    return bool(re.search(r"\bon (january|february|march|april|may|june|july|august|september|october|november|december) \d", (m.get("question") or "").lower()))
+
+
 def scan_polymarket(markets: list[dict]) -> list[dict]:
     """Odds that jump >= pm_jump inside pm_window_min, after a quiet stretch."""
     rows = []
@@ -458,7 +476,7 @@ def scan_polymarket(markets: list[dict]) -> list[dict]:
         if best["t"] is not None:
             pre = ps[(ts < best["t"] - win) & (ts >= best["t"] - win - 6 * 3600)]
             quiet_before = float(np.std(pre)) if len(pre) > 3 else None
-        flagged = abs(best["jump"]) >= CFG["pm_jump"]
+        flagged = abs(best["jump"]) >= CFG["pm_jump"] and not pm_skip(m, price)
         rows.append({
             "source": "Polymarket", "question": m.get("question"), "slug": m.get("slug"),
             "price": _f(price, 3), "vol24": _f(_num(m, "volume24hr"), 0),
@@ -645,8 +663,13 @@ def scan_minutes(bars: dict[str, pd.DataFrame]) -> list[dict]:
         v = df["Volume"].astype(float)
         r = np.log(c).diff()
         lv = np.log1p(v)
-        med = lv.rolling(B, min_periods=B // 2).median().shift(1)
-        mad = (lv - med).abs().rolling(B, min_periods=B // 2).median().shift(1) * 1.4826
+        # volume has a strong time-of-day shape (thin pre-market, heavy open/close), so compare each minute
+        # with the SAME minute on prior sessions, not with the minutes just before it
+        mod = pd.Series(df.index.hour * 60 + df.index.minute, index=df.index)
+        roll = lambda x: x.shift(1).rolling(CFG["m_days"], min_periods=CFG["m_min_days"]).median()   # noqa: E731
+        med = lv.groupby(mod).transform(roll)
+        dev = (lv - med).abs()
+        mad = dev.groupby(mod).transform(roll).fillna(dev.expanding(min_periods=30).median().shift(1)).clip(lower=0.25) * 1.4826
         vz = (lv - med) / mad.replace(0, np.nan)
         mult = v / np.expm1(med)
         rsd = r.rolling(B, min_periods=B // 2).std().shift(1)
@@ -741,9 +764,9 @@ def run(demo: bool, out_dir: str, minute_days: int) -> dict:
 
     print("minute data ...")
     msyms = [u["sym"] for u in UNIVERSE if u.get("minute")]
-    old_events = load_json(os.path.join(out_dir, "events.json"), [])
-    days = minute_days if (minute_days or not old_events) else 7
-    days = days or (28 if not old_events else 7)
+    old_events = [e for e in load_json(os.path.join(out_dir, "events.json"), []) if e.get("v") == SCHEMA]
+    days = minute_days if (minute_days or not old_events) else 12
+    days = days or (28 if not old_events else 12)
     try:
         bars = demo_minutes(msyms) if demo else live_minutes(msyms, days)
         new_events = scan_minutes(bars)
@@ -751,6 +774,8 @@ def run(demo: bool, out_dir: str, minute_days: int) -> dict:
         traceback.print_exc()
         new_events, bars = [], {}
         notes.append(f"minute scan failed: {e}")
+    for e in new_events:
+        e["v"] = SCHEMA
     events = merge_events(old_events, new_events)
 
     print("prediction markets ...")
@@ -770,7 +795,7 @@ def run(demo: bool, out_dir: str, minute_days: int) -> dict:
     print("options flow ...")
     asof_s = R.index[-1].strftime("%Y-%m-%d")
     day_ret = {s: float(R[s].iloc[-1]) for s in R.columns if np.isfinite(R[s].iloc[-1])}
-    opt_log = load_json(os.path.join(out_dir, "options_log.json"), [])
+    opt_log = [x for x in load_json(os.path.join(out_dir, "options_log.json"), []) if x.get("v") == SCHEMA]
     try:
         chains = flow.demo_chains() if demo else flow.live_chains()
         rz_now = {s: float(fp["rz"][s].iloc[-1]) for s in R.columns if np.isfinite(fp["rz"][s].iloc[-1])}
@@ -778,6 +803,13 @@ def run(demo: bool, out_dir: str, minute_days: int) -> dict:
         clast = close.reindex(R.index).iloc[-1]
         stock_usd = {s: float(vlast[s] * clast[s]) for s in chains if s in vlast and np.isfinite(vlast[s] * clast[s]) and vlast[s] > 0}
         earn = {} if demo else flow.earnings_dates([s for s in chains if is_equity(s) and s not in ("SPY", "QQQ")])
+        if demo and not opt_log:      # demo: pretend each name already has two weeks of quiet history
+            rng_ = np.random.default_rng(5)
+            for s_, (df_, _) in chains.items():
+                for k in range(10, 0, -1):
+                    d_ = (R.index[-1] - pd.tseries.offsets.BDay(k)).strftime("%Y-%m-%d")
+                    opt_log.append({"date": d_, "sym": s_, "v": SCHEMA, "unusual_prem": float(rng_.uniform(5e5, 1.5e6)),
+                                    "total_volume": int(pd.to_numeric(df_["volume"]).sum() * rng_.uniform(0.85, 1.15))})
         opts, opt_log = flow.options_footprints(chains, day_ret, opt_log, asof_s, rz_now, stock_usd, earn)
     except Exception as e:                                           # noqa: BLE001
         traceback.print_exc()
@@ -792,7 +824,7 @@ def run(demo: bool, out_dir: str, minute_days: int) -> dict:
         if demo:
             wallets = flow.demo_wallets(now_ts)
         else:
-            linked = [m for m in pm_markets if pm_assets(m.get("question", ""))]
+            linked = [m for m in pm_markets if pm_assets(m.get("question", "")) and flow.topic(m.get("question", "")) != "Sports"]
             linked.sort(key=lambda m: -(_num(m, "volume24hr") or 0))
             wallets = flow.live_wallets(linked[:15], now_ts)
     except Exception as e:                                           # noqa: BLE001
@@ -808,18 +840,18 @@ def run(demo: bool, out_dir: str, minute_days: int) -> dict:
         w["assets"] = pm_assets(w["question"] or "")
     for k in kb:
         k["assets"] = pm_assets(k["question"] or "")
-    wallet_log = load_json(os.path.join(out_dir, "wallet_log.json"), [])
+    wallet_log = [x for x in load_json(os.path.join(out_dir, "wallet_log.json"), []) if x.get("v") == SCHEMA]
     seen_w = {(x["wallet"], x["slug"], x["first"]) for x in wallet_log}
     for w in wallets:
         if w["suspicious"] and (w["wallet"], w["slug"], w["first"]) not in seen_w:
-            wallet_log.append({**w, "logged": datetime.now(NY).strftime("%Y-%m-%d %H:%M")})
+            wallet_log.append({**w, "v": SCHEMA, "logged": datetime.now(NY).strftime("%Y-%m-%d %H:%M")})
     wallet_log = wallet_log[-2000:]
 
-    pm_log = load_json(os.path.join(out_dir, "pm_log.json"), [])
+    pm_log = [x for x in load_json(os.path.join(out_dir, "pm_log.json"), []) if x.get("v") == SCHEMA]
     seen = {(x["slug"], x.get("jump_time")) for x in pm_log}
     for p in pm_rows:
         if p["flagged"] and (p["slug"], p.get("jump_time")) not in seen:
-            pm_log.append({**p, "logged": datetime.now(NY).strftime("%Y-%m-%d %H:%M")})
+            pm_log.append({**p, "v": SCHEMA, "logged": datetime.now(NY).strftime("%Y-%m-%d %H:%M")})
     pm_log = pm_log[-2000:]
 
     # ---- today's confluence ----
