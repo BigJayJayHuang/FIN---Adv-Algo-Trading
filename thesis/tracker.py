@@ -114,7 +114,7 @@ UNIVERSE = [
 SYMS = [u["sym"] for u in UNIVERSE]
 META = {u["sym"]: u for u in UNIVERSE}
 TRADEABLE = ["TSLA", "NVDA", "MSFT"]
-SCHEMA = 2      # bump when a signal definition changes; older archive rows are dropped     # what the course server prices today
+SCHEMA = 3      # bump when a signal definition changes; older archive rows are dropped     # what the course server prices today
 
 # ----------------------------------------------------------------------------
 # Settings (everything the thesis depends on, in one place)
@@ -138,7 +138,8 @@ CFG = {
     "m_min_days": 3,
     "m_vol_z": 4.0,             # robust volume z
     "m_ret_z": 1.5,             # |1-min move| under this many std
-    "m_min_mult": 8.0,          # and at least 8x the median minute volume
+    "m_min_mult": 15.0,         # and at least 15x the usual volume for that minute...
+    "m_max_mult": 50.0,         # ...but not 50x+: those look like late-reported block prints, not live orders
     "m_fwd": [15, 30, 60],      # minutes to look ahead
     "m_follow": 2.0,            # forward move >= 2x a normal move = "followed through"
     "m_merge": 10,              # merge bursts within 10 minutes
@@ -326,15 +327,15 @@ def demo_minutes(syms: list[str], seed: int = 11) -> dict[str, pd.DataFrame]:
         v = np.exp(rng.normal(6, 0.5, len(idx)))
         if s in ("CL=F", "BZ=F", "USO"):            # oil-style: big quiet sell, then the drop
             i = len(idx) - 1380 * 2 + 600
-            v[i:i + 3] *= 40
+            v[i:i + 3] *= 20
             r[i:i + 3] = -0.0003
             r[i + 15:i + 18] = -0.012
         if s == "NVDA":                              # a burst at the close: scheduled, ignored
             i = int(np.where((idx.hour == 16) & (idx.minute == 0))[0][-1])
-            v[i] *= 50
+            v[i] *= 25
         if s == "GC=F":                              # a burst that goes nowhere: noise
             i = len(idx) - 1380 * 4 + 200
-            v[i] *= 30
+            v[i] *= 20
         c = 100 * np.exp(np.cumsum(r))
         o = np.r_[c[0], c[:-1]]
         out[s] = pd.DataFrame({"Open": o, "High": np.maximum(o, c), "Low": np.minimum(o, c),
@@ -493,7 +494,9 @@ def scan_kalshi(rows: list[dict]) -> list[dict]:
     out = []
     for r in rows:
         jump = (r["last"] - r["prev"]) if r.get("prev") is not None else None
-        flagged = jump is not None and abs(jump) >= CFG["pm_jump"] and r["vol24"] > 0
+        settling = (r["last"] >= 0.97 or r["last"] <= 0.03
+                    or re.search(r"settlement price|\bon (jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]* \d", r["title"].lower()))
+        flagged = jump is not None and abs(jump) >= CFG["pm_jump"] and r["vol24"] > 0 and not settling
         out.append({"source": "Kalshi", "question": r["title"], "slug": r["ticker"],
                     "price": _f(r["last"], 3), "vol24": _f(r["vol24"], 0), "jump": _f(jump, 3),
                     "jump_time": None, "flagged": bool(flagged),
@@ -674,7 +677,7 @@ def scan_minutes(bars: dict[str, pd.DataFrame]) -> list[dict]:
         mult = v / np.expm1(med)
         rsd = r.rolling(B, min_periods=B // 2).std().shift(1)
         rz = r / rsd
-        hit = (vz >= CFG["m_vol_z"]) & (mult >= CFG["m_min_mult"]) & (rz.abs() <= CFG["m_ret_z"])
+        hit = (vz >= CFG["m_vol_z"]) & (mult >= CFG["m_min_mult"]) & (mult <= CFG["m_max_mult"]) & (rz.abs() <= CFG["m_ret_z"])
         sched = _sched_set(sym)
         last_t = None
         idx = df.index
