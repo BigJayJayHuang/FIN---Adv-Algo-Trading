@@ -1,0 +1,56 @@
+name: Thesis footprint tracker
+
+# Final project, part 1: keeps the thesis tracker on the Pages site current.
+# Runs after the US close on weekdays, pulls daily + 1-minute bars (yfinance),
+# Polymarket and Kalshi odds, and commits thesis/data/*.
+
+on:
+  workflow_dispatch:
+    inputs:
+      minute_days:
+        description: "Days of 1-minute bars to scan (28 = backfill, 0 = default)"
+        default: "0"
+  schedule:
+    # 21:43 UTC = 4:43pm EST / 5:43pm EDT, Monday-Friday. Odd minute on purpose.
+    - cron: "43 21 * * 1-5"
+
+concurrency:
+  group: thesis-tracker
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+  pages: write
+
+jobs:
+  track:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r thesis/requirements.txt
+
+      - name: Test the tracker on simulated data
+        run: python -m pytest thesis/tests -q
+
+      - name: Run the tracker
+        run: python thesis/tracker.py --minute-days "${{ github.event.inputs.minute_days || '0' }}"
+
+      - name: Commit tracker data
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "Update thesis tracker"
+          file_pattern: "thesis/data/*"
+
+      - name: Rebuild the Pages site
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api -X POST "repos/${{ github.repository }}/pages/builds" || true
