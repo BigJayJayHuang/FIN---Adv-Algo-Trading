@@ -251,7 +251,7 @@ def options_footprints(chains: dict, day_ret: dict, log: list[dict], asof: str, 
                                  and np.sign(f["lean"]) == -np.sign(r) and r != 0)
         out[s] = f
         log = [x for x in log if not (x["sym"] == s and x["date"] == asof)]
-        log.append({"date": asof, "sym": s, "v": 2, "total_volume": f["total_volume"], "total_oi": f["total_oi"],
+        log.append({"date": asof, "sym": s, "v": 3, "total_volume": f["total_volume"], "total_oi": f["total_oi"],
                     "unusual_prem": f["unusual_prem"], "lean": f["lean"], "atm_iv": f.get("atm_iv"),
                     "back_iv": f.get("back_iv"), "iv_spread": f.get("iv_spread"), "smirk": f.get("smirk"),
                     "gex": f.get("gex")})
