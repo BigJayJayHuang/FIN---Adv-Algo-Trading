@@ -60,5 +60,36 @@
     "atm_iv": 0.3382
    }
   }
+ },
+ {
+  "generated_at": "2026-11-25T11:20:16Z",
+  "for": "2026-11-25",
+  "n_orders": 0,
+  "tickers": {
+   "TSLA": {
+    "mode": "IDLE",
+    "dir": 0,
+    "points": 1,
+    "flow": 0.0,
+    "irregular": 0.8791,
+    "atm_iv": 0.4574
+   },
+   "NVDA": {
+    "mode": "IDLE",
+    "dir": 0,
+    "points": 1,
+    "flow": 0.0,
+    "irregular": 0.9737,
+    "atm_iv": 0.6973
+   },
+   "MSFT": {
+    "mode": "IDLE",
+    "dir": 0,
+    "points": 1,
+    "flow": 0.0,
+    "irregular": 0.557,
+    "atm_iv": 0.3127
+   }
+  }
  }
 ]
