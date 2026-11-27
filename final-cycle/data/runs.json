@@ -93,33 +93,33 @@
   }
  },
  {
-  "generated_at": "2026-11-26T10:56:37Z",
+  "generated_at": "2026-11-27T10:53:04Z",
   "for": "2026-11-27",
   "n_orders": 0,
   "tickers": {
    "TSLA": {
     "mode": "IDLE",
     "dir": 0,
-    "points": 3,
-    "flow": 0.0476,
-    "irregular": 0.5912,
-    "atm_iv": 0.5281
+    "points": 2,
+    "flow": 0.0,
+    "irregular": 0.8889,
+    "atm_iv": 0.5432
    },
    "NVDA": {
     "mode": "IDLE",
     "dir": 0,
     "points": 2,
-    "flow": 0.0663,
-    "irregular": 0.5633,
-    "atm_iv": 0.824
+    "flow": 0.0,
+    "irregular": 0.9632,
+    "atm_iv": 0.8379
    },
    "MSFT": {
     "mode": "IDLE",
     "dir": 0,
     "points": 2,
-    "flow": 0.0838,
-    "irregular": 0.2946,
-    "atm_iv": 0.4009
+    "flow": 0.0,
+    "irregular": 0.5841,
+    "atm_iv": 0.3825
    }
   }
  }
